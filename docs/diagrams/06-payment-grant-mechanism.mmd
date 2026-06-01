@@ -1,0 +1,8 @@
+flowchart TD
+  PV["Payment verified for buyerKey"] --> SPIKE{"Spike #1 result"}
+  SPIKE -->|"fresh-process firewall works — PREFERRED"| MA["Mechanism A<br/>spawn child process<br/>startQVACProvider(firewall [buyerKey])<br/>return pubkey, teardown after session"]
+  SPIKE -->|"only static-at-boot reliable"| MAP["Mechanism A-prime<br/>long-lived provider firewall [buyerKey]<br/>reveal secret provider pubkey on payment"]
+  SPIKE -->|"firewall cannot gate at all — unexpected"| FB["Fallback — app-layer gate<br/>provider open at transport<br/>refuses completion without verified receipt"]
+  MA --> GRANT["Buyer dht.connect GRANTED, freeloader refused at Noise"]
+  MAP --> GRANT
+  FB --> GRANT2["Buyer served only after receipt check<br/>beat reframed: 0 tokens (not 0 bytes)"]

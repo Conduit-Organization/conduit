@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.log
+
+# secrets — never commit
+.env
+.env.local
+CONDUIT-PLAN.md
+
+# live audit logs (keep AUDIT_LOG.sample.jsonl as a committed example)
+AUDIT_LOG.jsonl
+audit-*.jsonl
+
+# QVAC / model caches
+.qvac/
+models/
+*.gguf
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/

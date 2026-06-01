@@ -1,0 +1,41 @@
+sequenceDiagram
+  autonumber
+  actor User
+  participant BA as Buyer Agent
+  participant LLM as Local LLM QVAC
+  participant W as Buyer Wallet WDK
+  participant SS as Seller Storefront
+  participant PG as Provider-gate
+  participant QP as QVAC Provider Seller GPU
+  participant SW as Settlement WDK
+  participant RPC as Testnet RPC
+  participant AUD as Audit Log
+
+  User->>BA: prompt
+  BA->>LLM: completion(history, captureThinking)
+  LLM-->>BA: draft + thinking
+  BA->>LLM: re-sample k=3 + embed() consistency
+  Note over BA: confidence LOW, escalate
+  BA->>SS: discover_provider + get_quote
+  SS-->>BA: quote {price, wallet, nonce, chainId, token}
+  BA->>W: signTypedData EIP-3009 transferWithAuthorization
+  W-->>BA: signed authorization (no tokens moved yet)
+  BA->>SS: payment receipt = signed auth + identity-binding sig
+  SS->>RPC: read-only verify payer has funds
+  RPC-->>SS: funds OK
+  SS->>PG: payment verified, open the door for buyerKey
+  PG->>QP: startQVACProvider(firewall allow [buyerKey])
+  QP-->>PG: provider publicKey
+  PG-->>SS: provider publicKey
+  SS-->>BA: provider publicKey
+  BA->>QP: loadModel(delegate), dht.connect Noise handshake
+  Note over BA,QP: buyer pubkey in allow-list, GRANTED
+  BA->>QP: completion(history, stream)
+  QP-->>BA: token stream, E2E, runs on seller GPU
+  Note over BA: read stats.timeToFirstToken / tokensPerSecond
+  QP->>SW: inference complete, settle
+  SW->>RPC: submit EIP-3009 authorization on-chain
+  RPC-->>SW: tx confirmed (hash)
+  BA-->>AUD: log inference + TTFT/TPS + cloud_bytes 0
+  SW-->>AUD: log settlement tx
+  BA-->>User: SoTA answer

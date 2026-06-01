@@ -1,0 +1,10 @@
+sequenceDiagram
+  autonumber
+  participant FL as Freeloader
+  participant QP as QVAC Provider
+  participant LOG as loggingStream
+  FL->>QP: dht.connect(providerPublicKey), no payment
+  Note over QP: firewall mode allow, publicKeys = [buyerKey]<br/>freeloader pubkey NOT in list
+  QP--xFL: Noise handshake REJECTED, socket destroyed, no RPC mounted
+  QP->>LOG: handshake_rejected, reason not_allow_listed, bytes_served 0
+  Note over FL,QP: 0 prompt bytes parsed, 0 tokens served

@@ -1,0 +1,16 @@
+flowchart TD
+  S["conduit bench start"] --> DET["Detect backend + memory<br/>stats.backendDevice, RAM/VRAM"]
+  DET --> M1["loadModel Qwen3-1.7B, short completion"]
+  M1 --> Q1{"loads AND tps meets bar?"}
+  Q1 -->|"no"| FAIL["cannot sell — buyer-only node"]
+  Q1 -->|"yes"| M2["loadModel Qwen3-4B, short completion"]
+  M2 --> Q2{"loads AND tps meets bar?"}
+  Q2 -->|"no"| O17["offer tier = 1.7B"]
+  Q2 -->|"yes"| M3["loadModel 7B GGUF, short completion"]
+  M3 --> Q3{"loads AND tps meets bar?"}
+  Q3 -->|"no"| O4["offer tier = 4B — RTX 4050 / M5 16GB"]
+  Q3 -->|"yes"| O7["offer tier = 7B — 24GB+ box"]
+  O17 --> PROF["capability profile + pricing policy"]
+  O4 --> PROF
+  O7 --> PROF
+  PROF --> ADV["advertise offer on storefront"]

@@ -1,0 +1,44 @@
+flowchart LR
+  subgraph BUYER["CONDUIT NODE — role BUY (any machine; demo M5 16GB)"]
+    direction TB
+    BA["Buyer Agent — tool loop<br/>completion(tools, captureThinking)"]
+    CR["Confidence Router<br/>self-assess + self-consistency via embed()"]
+    BLM["Local LLM Qwen3-0.6B / Llama-3.2-1B<br/>qvac completion()"]
+    BDC["Delegated client<br/>loadModel(delegate) + completion(stream)"]
+    BW["WDK Wallet EVM/ERC-4337<br/>sign / signTypedData / transfer"]
+    BP["Capability Prober (conduit bench)"]
+    BAUD["Audit Logger JSONL + Ledger TUI"]
+    BA --> CR --> BLM
+    BA --> BDC
+    BA --> BW
+    BDC -.-> BAUD
+  end
+
+  subgraph SELLER["CONDUIT NODE — role SELL (benched OK; demo RTX 4050)"]
+    direction TB
+    SP["Capability Prober (conduit bench)<br/>profile + pricing"]
+    SS["Storefront — hyperswarm topic conduit:market:v1<br/>announce / quote / verify payment"]
+    SPG["Provider-gate — lifecycle Mechanism A or A-prime"]
+    SQP["Payment-gated QVAC Provider<br/>startQVACProvider(firewall allow [buyerKey])<br/>runs Qwen3-4B on GPU"]
+    SSW["Settlement worker WDK<br/>verify + submit EIP-3009 + confirm"]
+    SW["WDK Wallet EVM — receives USDt"]
+    SAUD["Audit Logger JSONL — loggingStream()"]
+    SP --> SS --> SPG --> SQP
+    SS --> SSW --> SW
+    SQP -.-> SAUD
+  end
+
+  subgraph FREE["FREELOADER — separate keypair, never paid"]
+    FL["loadModel(delegate providerPublicKey)"]
+  end
+
+  subgraph EXT["DISCLOSED NON-AI REMOTE"]
+    RPC["EVM testnet RPC — Sepolia 11155111<br/>+ Pimlico/Candide USDt faucet"]
+  end
+
+  BA -.->|"Storefront: discover / quote / pay"| SS
+  BDC ==>|"E2E delegated inference Noise/DHT — prompt in / tokens out"| SQP
+  BW -->|"EIP-3009 transfer"| RPC
+  SSW -->|"submit + confirm tx"| RPC
+  FL -->|"dht.connect — no payment"| SQP
+  SQP -.->|"HANDSHAKE REJECTED — 0 bytes served"| FL

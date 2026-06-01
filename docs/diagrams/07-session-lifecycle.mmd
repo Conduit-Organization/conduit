@@ -1,0 +1,12 @@
+stateDiagram-v2
+  [*] --> Advertising
+  Advertising --> QuoteIssued: buyer get_quote (nonce reserved)
+  QuoteIssued --> PaymentVerified: signed EIP-3009 verified (sig + funds)
+  QuoteIssued --> Advertising: quote expires (nonce released)
+  PaymentVerified --> ProviderLive: provider started, firewall=[buyerKey]
+  ProviderLive --> Serving: dht.connect GRANTED + completion(stream)
+  Serving --> Settled: inference complete, EIP-3009 submitted, tx confirmed
+  Serving --> ProviderLive: mid-stream drop, buyer re-issues (no auto-reconnect)
+  Settled --> [*]
+  QuoteIssued --> Rejected: freeloader / no payment / bad signature
+  Rejected --> [*]

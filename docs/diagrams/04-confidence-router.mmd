@@ -1,0 +1,11 @@
+flowchart TD
+  A["User prompt"] --> B["Local draft — completion(captureThinking)"]
+  B --> C["Compute signals"]
+  C --> C1["self_confidence — structured output / Zod"]
+  C --> C2["self-consistency k=3 via embed() cosine"]
+  C --> C3["heuristics — hedging in thinking, output length"]
+  C1 --> D{"confident? conf greater-eq tau AND consistency greater-eq c AND no flag"}
+  C2 --> D
+  C3 --> D
+  D -->|"yes"| E["Return LOCAL answer<br/>cost 0 USDt, 0 cloud bytes"]
+  D -->|"no"| F["ESCALATE: discover, quote, pay, delegate"]
