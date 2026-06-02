@@ -89,4 +89,26 @@ transfer, gas in ETH, confirm-before-grant) — universal, proven. EIP-3009 gasl
 
 ---
 
-### Phase 0 COMPLETE ✅ — Spike #1 ✅ · Spike #1.5 ✅ · Spike #2 ✅. All three de-risking spikes pass on the real RTX 4050 + a real Sepolia testnet. Ready for **Phase 1** (thin vertical slice: wire payment → firewall-gated provider → delegated inference, end to end).
+### Phase 0 COMPLETE ✅ — Spike #1 ✅ · Spike #1.5 ✅ · Spike #2 ✅. All three de-risking spikes pass on the real RTX 4050 + a real Sepolia testnet.
+
+---
+
+## Phase 1 — thin vertical slice ✅ **PASS**
+
+First end-to-end run fusing Spike #1 + #1.5 into one flow. `npm run slice` (`src/scripts/slice.ts` +
+`src/sell/provider.ts` + `src/buy/consumer.ts` + `src/core/{audit,config}.ts`):
+
+1. buyer pays **0.01 USD₮ → seller** (WDK, real tx `0xee0fd429…`) · 2. seller verifies on-chain (+0.01) ·
+3. payment confirmed → seller opens a **firewall-gated provider for ONLY the buyer** ·
+4. buyer delegates **Qwen3-4B** (from `bench-profile.json` `topSellable`) over E2E P2P → real answer,
+**ttft 49 ms, tps 64.9**, 1962 chars · 5. freeloader (no pay) → **REJECTED** at the handshake, 0 bytes.
+
+One-run **`AUDIT_LOG.jsonl`** captured: settlement(submitted→confirmed) → gate_opened → handshake_granted
+(cloud_bytes 0) → inference(4B, ttft/tps, cloud_bytes 0) → handshake_rejected(not_allow_listed, 0 bytes).
+Sample committed as `AUDIT_LOG.sample.jsonl`.
+
+**Headline now runs as one sequence: pay → the gate opens → you get the 4B answer; don't pay → refused. 0 cloud bytes.**
+
+**Cosmetic TODO (Phase 4 polish):** orchestrator prefixes every streamed token with `[buyer]` (noisy stream);
+`total_tokens` is null (stat not exposed — count locally); the benign Bare-worker double-free still prints on
+teardown (results are captured before it).

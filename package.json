@@ -11,6 +11,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "bench": "tsx src/scripts/bench.ts",
+    "slice": "tsx src/scripts/slice.ts",
     "spike:firewall": "tsx src/spikes/01-firewall/run.ts",
     "spike:settle": "tsx src/spikes/02-settlement/run.ts",
     "spike:delegate": "tsx src/spikes/03-prober-delegate/run.ts"
