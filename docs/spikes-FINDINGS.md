@@ -110,5 +110,33 @@ Sample committed as `AUDIT_LOG.sample.jsonl`.
 **Headline now runs as one sequence: pay → the gate opens → you get the 4B answer; don't pay → refused. 0 cloud bytes.**
 
 **Cosmetic TODO (Phase 4 polish):** orchestrator prefixes every streamed token with `[buyer]` (noisy stream);
-`total_tokens` is null (stat not exposed — count locally); the benign Bare-worker double-free still prints on
-teardown (results are captured before it).
+the benign Bare-worker double-free still prints on teardown (results are captured before it). *(`total_tokens`
+gap resolved in Phase 2 via `stats.promptTokens`.)*
+
+---
+
+## Phase 2 — buyer agent + confidence router ✅ **PASS**
+
+**Confidence router** (`src/buy/router.ts`, `npm run route`): no logprobs → measure **answer stability**. Sample
+the local 0.6B k× (`kvCache:false` so each is an independent attempt), embed each answer (EMBEDDINGGEMMA-300M),
+take mean pairwise cosine. Validated separation: easy ≥0.877 → LOCAL, hard/creative ≤0.838 → ESCALATE (threshold 0.86).
+
+**Agent + spend policy** (`src/buy/{agent,policy}.ts`, `npm run agent`): the router *recommends*; the **SpendPolicy**
+(per-call cap + total budget) — not the model, not the seller — *authorizes* the pay; then pay USD₮ → confirm
+on-chain → delegate the 4B. One run (budget 0.01 = exactly one escalation):
+
+| Q | consistency | decision |
+|---|---|---|
+| capital of France | 1.000 | LOCAL · free → "Paris" |
+| original aphorism about time | 0.812 | **PAID 0.01 USD₮** → 4B: *"Time is the only currency that doesn't earn interest."* |
+| 12 + 12 | 1.000 | LOCAL · free → "24" |
+| invent a brand name | 0.776 | **DECLINED → local** (budget exhausted) |
+
+One-run audit: gate_opened → inference(local) → settlement(confirmed, tx) → handshake_granted → inference(delegated
+4B, ttft 2.85 s, **tps 59, prompt_tokens 25**) → inference(local) → inference(local, declined). cloud_bytes 0
+throughout; budget held (spent 0.01/0.01).
+
+**Known limitation (honest):** self-consistency reliably flags creative/ambiguous prompts, but NOT factual-hard
+ones where a tiny model *confidently converges on a wrong answer* (it consistently hallucinated "Ruytjens" as the
+best chess opening → read as "sure"). Product fix = add a self-assessment/verifier signal (roadmap). For v1 the
+router is a defensible heuristic + curated demo prompts (exactly the Spike #4 kill-criterion fallback).
