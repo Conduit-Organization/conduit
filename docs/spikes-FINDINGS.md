@@ -164,3 +164,22 @@ quote + replay-safe nonce + identity-bound payment + gated grant + delegated inf
 "another worker is still running" warning (it served fine). On the real two-machine demo (4050 seller + M5 buyer)
 there's no shared lock. **Phase 4 polish:** `modelType:'llm'` is deprecated → use `'llamacpp-completion'`; tidy
 teardown (the benign double-free / ECONNRESET on exit).
+
+---
+
+## Phase 4 — artifacts + demo ◑ (headline demo + reproducibility done)
+
+`npm run demo` (`src/scripts/demo.ts` + `src/core/ledger.ts`) runs the ≤5-min story in one shot:
+① local 0.6B answers an easy prompt **free** ($0, cloud_bytes 0) · ② the agent detects low confidence (creative
+prompt, consistency 0.62) → **pays 0.01 USD₮** → SoTA Qwen3-4B answer over E2E (ttft 45 ms, tps 65),
+e.g. *"Trust is the quiet confidence in another's integrity, forged in the fire of vulnerability."* ·
+③ a **freeloader is REJECTED at the handshake (0 bytes)** — with a live USD₮ **ledger** (buyer −0.01, seller +0.01)
+and a **cloud_bytes = 0** counter. The one-run `AUDIT_LOG.jsonl` (committed as `AUDIT_LOG.sample.jsonl`) numbers
+match the ledger + on-screen output (Stage-2 one-run consistency). README rewritten with clean-checkout steps + all commands.
+
+**Remaining (minor):** a runtime traffic-isolation test; polish (`modelType:'llm'`→`'llamacpp-completion'`, the
+teardown double-free, the noisy `[buyer]` token stream in `slice`); the ≤5-min video + hardware screenshots (user-recorded).
+
+---
+
+### Conduit runs end-to-end across all phases (0→4) on a real RTX 4050 + a real Sepolia testnet.

@@ -17,6 +17,7 @@
     "sell": "tsx src/node/sell.ts",
     "buy": "tsx src/node/buy.ts",
     "market": "tsx src/scripts/market-demo.ts",
+    "demo": "tsx src/scripts/demo.ts",
     "spike:firewall": "tsx src/spikes/01-firewall/run.ts",
     "spike:settle": "tsx src/spikes/02-settlement/run.ts",
     "spike:delegate": "tsx src/spikes/03-prober-delegate/run.ts"
