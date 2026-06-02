@@ -140,3 +140,27 @@ throughout; budget held (spent 0.01/0.01).
 ones where a tiny model *confidently converges on a wrong answer* (it consistently hallucinated "Ruytjens" as the
 best chess opening → read as "sure"). Product fix = add a self-assessment/verifier signal (roadmap). For v1 the
 router is a defensible heuristic + curated demo prompts (exactly the Spike #4 kill-criterion fallback).
+
+---
+
+## Phase 3 — P2P storefront ✅ **PASS**
+
+Two **independent** processes (`src/node/sell.ts`, `src/node/buy.ts`) meet on a Hyperswarm topic
+(`conduit:market:v1`) and run the whole negotiation with **no orchestrator** (`npm run market` only *launches*
+both — it does not coordinate them). Files: `src/core/{protocol,pricing}.ts`, `src/node/{sell,buy}.ts`.
+
+Verified flow (one run):
+1. seller advertises an offer from its prober profile + pricing: **Qwen3-4B @ 0.01 USD₮, ~59 tps**.
+2. buyer discovers it over the topic → requests a quote.
+3. seller issues a **quote with a single-use nonce**.
+4. buyer signs the **identity binding** (`consumerPub ↔ wallet ↔ nonce`, ethers `signMessage`), pays USD₮ (real tx), sends the receipt.
+5. seller verifies: **signature recovers to the payer wallet** (`ethers.verifyMessage`) + **on-chain payment confirmed** + **nonce unused** → marks nonce used → opens a firewall-gated provider for that buyer → grants.
+6. buyer delegates the 4B → real answer (ttft 55 ms, **tps 61, promptTokens 29**).
+
+→ **A fresh buyer/seller pairing works with zero code changes** (the Phase 3 exit gate): serverless discovery +
+quote + replay-safe nonce + identity-bound payment + gated grant + delegated inference.
+
+**Single-machine note:** running both QVAC workers on ONE box shares `~/.qvac/.worker.lock` → a harmless
+"another worker is still running" warning (it served fine). On the real two-machine demo (4050 seller + M5 buyer)
+there's no shared lock. **Phase 4 polish:** `modelType:'llm'` is deprecated → use `'llamacpp-completion'`; tidy
+teardown (the benign double-free / ECONNRESET on exit).
