@@ -189,9 +189,14 @@ const server = http.createServer((req, res) => {
       json(res, 200, { ok: true });
       return;
     }
-    if (req.method === 'GET' && p === '/api/wallet/export') {
+    if (req.method === 'POST' && p === '/api/wallet/export') {
       if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
-      json(res, 200, { mnemonic: wallet.mnemonic });
+      if (!keystore.exists()) { json(res, 200, { mnemonic: wallet.mnemonic }); return; } // dev .env fallback (no password)
+      const { password } = await readBody(req);
+      try {
+        const w = await keystore.unlock(String(password ?? '')); // re-verify the password before revealing
+        json(res, 200, { mnemonic: w.mnemonic });
+      } catch { json(res, 401, { error: 'wrong password' }); }
       return;
     }
 

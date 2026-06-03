@@ -96,9 +96,7 @@ export async function unlockWallet(password: string): Promise<{ address: string 
 export async function lockWallet(): Promise<void> {
   await fetch('/api/wallet/lock', { method: 'POST' });
 }
-export async function exportWallet(): Promise<string> {
-  const r = await fetch('/api/wallet/export');
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || 'locked');
+export async function exportWallet(password: string): Promise<string> {
+  const d = await postJson('/api/wallet/export', { password });
   return d.mnemonic as string;
 }

@@ -10,8 +10,10 @@ const FAUCETS = [
 export default function WalletMenu({ address, onClose, onLocked }: { address: string; onClose: () => void; onLocked: () => void }) {
   const [tab, setTab] = useState<'fund' | 'export'>('fund');
   const [copied, setCopied] = useState(false);
+  const [pw, setPw] = useState('');
   const [phrase, setPhrase] = useState('');
   const [revealErr, setRevealErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
   function copy() {
     void navigator.clipboard?.writeText(address);
@@ -19,8 +21,11 @@ export default function WalletMenu({ address, onClose, onLocked }: { address: st
     setTimeout(() => setCopied(false), 1100);
   }
   async function reveal() {
-    setRevealErr('');
-    try { setPhrase(await exportWallet()); } catch (e) { setRevealErr(e instanceof Error ? e.message : String(e)); }
+    if (!pw) { setRevealErr('Enter your wallet password.'); return; }
+    setRevealErr(''); setBusy(true);
+    try { setPhrase(await exportWallet(pw)); setPw(''); }
+    catch (e) { setRevealErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
   }
   async function lock() {
     await lockWallet();
@@ -61,9 +66,10 @@ export default function WalletMenu({ address, onClose, onLocked }: { address: st
           <div className="modal-body">
             {!phrase ? (
               <>
-                <p className="gate-sub warn">Your recovery phrase controls your funds. Make sure no one is watching your screen.</p>
+                <p className="gate-sub warn">Your recovery phrase controls your funds. Enter your password, and make sure no one is watching your screen.</p>
+                <input className="gate-input" type="password" placeholder="Wallet password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && reveal()} autoFocus />
                 {revealErr && <div className="gate-err">{revealErr}</div>}
-                <button className="gate-btn ghost" onClick={reveal}>Reveal recovery phrase</button>
+                <button className="gate-btn ghost" onClick={reveal} disabled={busy}>{busy ? 'Verifying…' : 'Reveal recovery phrase'}</button>
               </>
             ) : (
               <>
