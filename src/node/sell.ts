@@ -39,6 +39,13 @@ const quotes = new Map<string, { balanceBefore: bigint }>();
 const used = new Set<string>();
 let providerPub: string | undefined;
 
+// Read the seller's USD₮ balance, surviving transient RPC timeouts (a public testnet RPC blips).
+// A seller daemon must never crash on a flaky balance read — degrade the negotiation instead.
+async function balanceOrNull(): Promise<bigint | null> {
+  try { return await seller.tokenBalance(cfg.usdtAddress); }
+  catch (e: any) { console.log('[seller] rpc error reading balance:', e?.message ?? e); return null; }
+}
+
 async function ensureProvider(buyerPub: string): Promise<string> {
   if (!providerPub) {
     const res = await sdk.startQVACProvider({ firewall: { mode: 'allow', publicKeys: [buyerPub] } });
@@ -56,9 +63,9 @@ async function verifyReceipt(m: any): Promise<{ ok: boolean; reason?: string }> 
   catch { return { ok: false, reason: 'bad signature' }; }
   if (signer.toLowerCase() !== String(m.buyerWallet).toLowerCase()) return { ok: false, reason: 'signature ≠ wallet' };
   const price = offer.priceBaseUnits;
-  let bal = await seller.tokenBalance(cfg.usdtAddress);
-  for (let i = 0; i < 40 && bal < q.balanceBefore + price; i++) { await sleep(2000); bal = await seller.tokenBalance(cfg.usdtAddress); }
-  if (bal < q.balanceBefore + price) return { ok: false, reason: 'payment not confirmed on-chain' };
+  let bal = await balanceOrNull();
+  for (let i = 0; i < 40 && (bal === null || bal < q.balanceBefore + price); i++) { await sleep(2000); bal = await balanceOrNull(); }
+  if (bal === null || bal < q.balanceBefore + price) return { ok: false, reason: 'payment not confirmed on-chain' };
   used.add(m.nonce);
   return { ok: true };
 }
@@ -69,8 +76,10 @@ swarm.on('connection', (conn: any) => {
   send(conn, { type: 'offer', sellerWallet: seller.address, model: offer.model, priceBaseUnits: String(offer.priceBaseUnits), tps: offer.tps, token: cfg.usdtAddress, chainId: cfg.chainId });
   onMessages(conn, async (m) => {
     if (m.type === 'quoteReq') {
+      const balanceBefore = await balanceOrNull();
+      if (balanceBefore === null) { send(conn, { type: 'reject', reason: 'seller rpc unavailable, retry' }); return; }
       const nonce = crypto.randomBytes(16).toString('hex');
-      quotes.set(nonce, { balanceBefore: await seller.tokenBalance(cfg.usdtAddress) });
+      quotes.set(nonce, { balanceBefore });
       send(conn, { type: 'quote', price: String(offer.priceBaseUnits), sellerWallet: seller.address, nonce, token: cfg.usdtAddress, chainId: cfg.chainId });
       console.log('[seller] quoted', String(offer.priceBaseUnits), 'nonce', nonce.slice(0, 12) + '…');
     } else if (m.type === 'receipt') {
@@ -89,3 +98,7 @@ console.log(`[seller] online. offer: ${offer.model} @ ${offer.priceBaseUnits} ba
 async function shutdown() { try { await sdk.stopQVACProvider(); } catch {} try { await sdk.close(); } catch {} try { await swarm.destroy(); } catch {} process.exit(0); }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+// A seller is a long-running daemon — never let a stray error (e.g. a flaky RPC) take it down.
+process.on('uncaughtException', (e: any) => console.error('[seller] uncaught (staying up):', e?.message ?? e));
+process.on('unhandledRejection', (e: any) => console.error('[seller] unhandled (staying up):', e?.message ?? e));
