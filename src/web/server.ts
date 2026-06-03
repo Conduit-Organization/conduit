@@ -1,7 +1,10 @@
 // Conduit local web app — the consumer (buyer) face. A tiny Node server wraps the proven engine
 // (confidence router + spend policy) and the live P2P storefront, and serves a chat + wallet UI.
-// This process is the BUYER. Sellers are separate processes/machines (`npm run sell`) discovered
-// over Hyperswarm; the buyer pays one of them per inference. Run: npm run web
+//
+// The wallet is a per-user encrypted keystore (src/core/keystore.ts): the app is LOCKED until the
+// user creates/imports + unlocks it; the buyer account + storefront are built on unlock. The local
+// router warms independently (free answers need no wallet). A `.env` mnemonic auto-unlocks in dev.
+// Run: npm run web
 import http from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -20,6 +23,7 @@ const { SpendPolicy } = await import('../buy/policy');
 const { createRouter } = await import('../buy/router');
 const { createStorefront } = await import('../buy/storefront');
 const { createMarketAgent } = await import('../buy/market-agent');
+const keystore = await import('../core/keystore');
 const sdk: any = await import('@qvac/sdk');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -51,29 +55,56 @@ const MIME: Record<string, string> = {
 const DEC = 6;
 const MAX_PER_CALL = 100_000n; // 0.1 USD₮ hard cap per single inference
 const MAX_BUDGET = 1_000_000n; // 1 USD₮ session budget
+const MIN_PW = 8;
 
 const cfg = loadConfig();
-const buyer = await getAccount(cfg.mnemonic, cfg.rpcUrl, 0); // this process = buyer = account 0
 const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
 
-// The live marketplace client — discovers sellers immediately so the UI can browse before asking.
-const storefront = await createStorefront({ buyer, signerPhrase: cfg.mnemonic, consumerPub: buyerPub, sdk });
-
+// ---- wallet + dependent services (buyer / storefront / agent are built on unlock) ----
+let wallet: { mnemonic: string; address: string } | null = null;
+let buyer: any = null;
+let storefront: any = null;
+let agent: any = null;
 let setupErr: string | undefined;
 
-// Lazy, warm-on-boot: load the local router + market agent without blocking the UI.
-let agentPromise: Promise<any> | null = null;
-let agentReady = false;
-function ensureAgent(): Promise<any> {
-  if (!agentPromise) {
-    agentPromise = (async () => {
-      const router = await createRouter({ k: 5 });
-      const agent = createMarketAgent({ router, policy, storefront });
-      agentReady = true;
-      return agent;
-    })().catch((e) => { setupErr = String(e?.message ?? e); throw e; });
-  }
-  return agentPromise;
+// The local router warms independently of the wallet (free, on-device answers need no key).
+let router: any = null;
+let routerReady = false;
+const routerPromise = (async () => {
+  try { router = await createRouter({ k: 5 }); routerReady = true; }
+  catch (e: any) { setupErr = String(e?.message ?? e); }
+})();
+
+async function unlockWith(mnemonic: string): Promise<string> {
+  const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
+  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk });
+  buyer = acct;
+  storefront = sf;
+  agent = null; // (re)created lazily once the router is warm
+  wallet = { mnemonic, address: acct.address };
+  return acct.address;
+}
+
+function lock(): void {
+  const sf = storefront;
+  wallet = null; buyer = null; storefront = null; agent = null;
+  void sf?.close?.();
+}
+
+function getAgent(): any {
+  if (!agent && routerReady && storefront) agent = createMarketAgent({ router, policy, storefront });
+  return agent;
+}
+
+// Dev convenience only: no keystore on disk but `.env` has a mnemonic → auto-unlock the dev wallet.
+// (The shipped app has no .env, so real users always go through create/import/unlock.)
+// Set CONDUIT_NO_ENV_WALLET=1 to force the real onboarding/unlock flow even in dev.
+if (!keystore.exists() && cfg.mnemonic && process.env.CONDUIT_NO_ENV_WALLET !== '1') {
+  void unlockWith(cfg.mnemonic).catch((e) => { setupErr = String(e?.message ?? e); });
+}
+
+function walletStatus() {
+  return { exists: keystore.exists(), unlocked: !!wallet, address: wallet?.address ?? keystore.readAddress() };
 }
 
 function json(res: http.ServerResponse, code: number, obj: unknown) {
@@ -85,7 +116,15 @@ function offerJson(o: { id: string; sellerWallet: string; model: string; priceBa
   return { id: o.id, address: o.sellerWallet, model: o.model, price: formatUnits(o.priceBaseUnits, DEC), tps: o.tps, online: o.online };
 }
 
-// Serve a file from the built React app; returns false if it's not a real file under appDist.
+function readBody(req: http.IncomingMessage): Promise<any> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { resolve({}); } });
+  });
+}
+
+// ---------- static (built React app) ----------
 function serveStatic(res: http.ServerResponse, pathname: string): boolean {
   const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   const full = path.normalize(path.join(appDist, rel));
@@ -99,9 +138,6 @@ function serveStatic(res: http.ServerResponse, pathname: string): boolean {
   res.end(readFileSync(full));
   return true;
 }
-
-// Serve the consumer UI: built React app if present (SPA fallback to its index.html),
-// else a short build-prompt page so `npm run web` before `npm run app:build` is self-explanatory.
 function serveApp(res: http.ServerResponse, pathname: string) {
   if (serveStatic(res, pathname)) return;
   if (existsSync(path.join(appDist, 'index.html'))) { serveStatic(res, '/'); return; }
@@ -109,21 +145,67 @@ function serveApp(res: http.ServerResponse, pathname: string) {
   res.end(buildPrompt);
 }
 
-function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
-    let body = '';
-    req.on('data', (c) => (body += c));
-    req.on('end', () => resolve(body));
-  });
-}
-
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', 'http://localhost');
+  const p = url.pathname;
   void (async () => {
-    if (req.method === 'GET' && url.pathname === '/api/state') {
+    // ---------- wallet management ----------
+    if (req.method === 'GET' && p === '/api/wallet') {
+      json(res, 200, walletStatus());
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/wallet/create') {
+      const { password } = await readBody(req);
+      if (keystore.exists()) { json(res, 409, { error: 'a wallet already exists on this machine' }); return; }
+      if (!password || String(password).length < MIN_PW) { json(res, 400, { error: `password must be at least ${MIN_PW} characters` }); return; }
+      try {
+        const w = await keystore.create(password);
+        await unlockWith(w.mnemonic);
+        json(res, 200, { address: w.address, mnemonic: w.mnemonic }); // mnemonic returned ONCE for backup
+      } catch (e: any) { json(res, 500, { error: String(e?.message ?? e) }); }
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/wallet/import') {
+      const { mnemonic, password } = await readBody(req);
+      if (!password || String(password).length < MIN_PW) { json(res, 400, { error: `password must be at least ${MIN_PW} characters` }); return; }
+      try {
+        const w = await keystore.importMnemonic(String(mnemonic ?? ''), password);
+        await unlockWith(w.mnemonic);
+        json(res, 200, { address: w.address });
+      } catch (e: any) { json(res, 400, { error: String(e?.message ?? e) }); }
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/wallet/unlock') {
+      const { password } = await readBody(req);
+      try {
+        const w = await keystore.unlock(String(password ?? ''));
+        await unlockWith(w.mnemonic);
+        json(res, 200, { address: w.address });
+      } catch (e: any) { json(res, 401, { error: String(e?.message ?? e) }); }
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/wallet/lock') {
+      lock();
+      json(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === 'GET' && p === '/api/wallet/export') {
+      if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
+      json(res, 200, { mnemonic: wallet.mnemonic });
+      return;
+    }
+
+    // ---------- state ----------
+    if (req.method === 'GET' && p === '/api/state') {
+      const w = walletStatus();
+      if (!wallet) {
+        json(res, 200, { wallet: w, ready: false, sellersOnline: 0, peer: null, selected: 'auto', setupErr: setupErr ?? null });
+        return;
+      }
       const active = storefront.getActive();
       const [bU, bE] = await Promise.all([buyer.tokenBalance(cfg.usdtAddress), buyer.ethBalance()]);
       json(res, 200, {
+        wallet: w,
         buyer: { address: buyer.address, usdt: formatUnits(bU, DEC), eth: formatUnits(bE, 18) },
         cloudBytes: 0,
         spent: formatUnits(policy.spent, DEC),
@@ -131,33 +213,38 @@ const server = http.createServer((req, res) => {
         sellerModel: active?.model ?? null,
         price: active ? formatUnits(active.priceBaseUnits, DEC) : null,
         peer: active ? offerJson(active) : null,
-        sellersOnline: storefront.list().filter((o) => o.online).length,
+        sellersOnline: storefront.list().filter((o: any) => o.online).length,
         selected: storefront.selectedId(),
-        ready: agentReady && !setupErr,
+        ready: routerReady && !setupErr,
         setupErr: setupErr ?? null,
       });
       return;
     }
-    if (req.method === 'GET' && url.pathname === '/api/sellers') {
+
+    // ---------- marketplace ----------
+    if (req.method === 'GET' && p === '/api/sellers') {
+      if (!storefront) { json(res, 200, { sellers: [], selected: 'auto' }); return; }
       json(res, 200, { sellers: storefront.list().map(offerJson), selected: storefront.selectedId() });
       return;
     }
-    if (req.method === 'POST' && url.pathname === '/api/select') {
-      const body = await readBody(req);
-      let id = 'auto';
-      try { id = JSON.parse(body).id || 'auto'; } catch {}
-      const active = storefront.select(id);
+    if (req.method === 'POST' && p === '/api/select') {
+      if (!storefront) { json(res, 409, { error: 'wallet locked' }); return; }
+      const { id } = await readBody(req);
+      const active = storefront.select(id || 'auto');
       json(res, 200, { ok: true, selected: storefront.selectedId(), active: active ? offerJson(active) : null });
       return;
     }
-    if (req.method === 'POST' && url.pathname === '/api/ask') {
-      const body = await readBody(req);
-      let prompt = '';
-      try { prompt = JSON.parse(body).prompt || ''; } catch {}
-      if (!prompt.trim()) { json(res, 400, { error: 'empty prompt' }); return; }
+
+    // ---------- ask ----------
+    if (req.method === 'POST' && p === '/api/ask') {
+      const { prompt } = await readBody(req);
+      if (!prompt || !String(prompt).trim()) { json(res, 400, { error: 'empty prompt' }); return; }
+      if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
+      await routerPromise;
+      const a = getAgent();
+      if (!a) { json(res, 503, { error: setupErr ?? 'engine still warming up' }); return; }
       try {
-        const agent = await ensureAgent();
-        const r = await agent.ask(prompt);
+        const r = await a.ask(String(prompt));
         json(res, 200, {
           source: r.source, answer: r.answer, note: r.note ?? null,
           consistency: Number(r.consistency.toFixed(3)), cost: formatUnits(r.cost, DEC),
@@ -166,22 +253,23 @@ const server = http.createServer((req, res) => {
       } catch (e: any) { json(res, 500, { error: String(e?.message ?? e) }); }
       return;
     }
-    if (req.method === 'GET') { serveApp(res, url.pathname); return; }
+
+    if (req.method === 'GET') { serveApp(res, p); return; }
     res.writeHead(404); res.end('not found');
   })();
 });
 
 server.listen(PORT, () => {
   const built = existsSync(path.join(appDist, 'index.html'));
+  const w = walletStatus();
   console.log(`\n  ⬡ Conduit — open  →  http://localhost:${PORT}\n`);
-  console.log(`  buyer ${buyer.address} · searching the storefront for sellers (run \`npm run sell\` on a GPU peer)…`);
+  console.log(`  wallet: ${w.unlocked ? `unlocked ${w.address}` : w.exists ? 'locked (enter password)' : 'none yet (create or import in the app)'}`);
   if (!built) console.log('  note: React app not built — run `npm run app:build` for the UI (showing a build prompt until then).');
   console.log('  warming up the local model…\n');
-  void ensureAgent(); // warm the local router so the first free answer is fast
 });
 
 async function shutdown() {
-  try { await storefront.close(); } catch {}
+  try { lock(); } catch {}
   try { await sdk.close?.(); } catch {}
   process.exit(0);
 }

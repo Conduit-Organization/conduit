@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ask, getState, getSellers, selectSeller, type Peer, type State } from './api';
+import { ask, getSellers, getState, selectSeller, type Peer, type State } from './api';
 import type { ChatMsg } from './types';
 import Rail from './components/Rail';
 import Thread from './components/Thread';
 import Composer from './components/Composer';
+import WalletGate from './components/WalletGate';
+import WalletMenu from './components/WalletMenu';
+import { Mark } from './components/icons';
 
 export default function App() {
   const [state, setState] = useState<State | null>(null);
@@ -11,6 +14,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const idRef = useRef(0);
   const prevUsdt = useRef<number | null>(null);
@@ -19,13 +23,15 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       const s = await getState();
-      // flash the balance amber when it drops (a peer was just paid)
-      const usdt = Number(s.buyer.usdt);
-      if (prevUsdt.current !== null && usdt < prevUsdt.current - 1e-9) {
-        setFlash(true);
-        setTimeout(() => setFlash(false), 900);
+      if (s.buyer) {
+        // flash the balance amber when it drops (a peer was just paid)
+        const usdt = Number(s.buyer.usdt);
+        if (prevUsdt.current !== null && usdt < prevUsdt.current - 1e-9) {
+          setFlash(true);
+          setTimeout(() => setFlash(false), 900);
+        }
+        prevUsdt.current = usdt;
       }
-      prevUsdt.current = usdt;
       setState(s);
     } catch {
       /* engine still booting — keep last good state */
@@ -77,9 +83,7 @@ export default function App() {
         );
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
-        setMessages((m) =>
-          m.map((msg) => (msg.id === aiId ? { ...msg, pending: false, error } : msg)),
-        );
+        setMessages((m) => m.map((msg) => (msg.id === aiId ? { ...msg, pending: false, error } : msg)));
       } finally {
         setBusy(false);
         void refresh();
@@ -88,18 +92,32 @@ export default function App() {
     [busy, refresh],
   );
 
+  // ---- render ----
+  if (!state) {
+    return (
+      <div className="boot">
+        <Mark size={40} />
+        <span>starting Conduit…</span>
+      </div>
+    );
+  }
+  if (!state.wallet.unlocked) {
+    return <WalletGate status={state.wallet} onUnlocked={refresh} />;
+  }
   return (
     <div className="app">
-      <Rail state={state} sellers={sellers} flash={flash} onSelect={onSelect} />
+      <Rail state={state} sellers={sellers} flash={flash} onSelect={onSelect} onManage={() => setMenuOpen(true)} />
       <main className="main">
         <Thread messages={messages} onExample={send} />
-        <Composer
-          onSend={send}
-          busy={busy}
-          ready={!!state?.ready}
-          setupErr={state?.setupErr ?? null}
-        />
+        <Composer onSend={send} busy={busy} ready={!!state.ready} setupErr={state.setupErr} />
       </main>
+      {menuOpen && state.wallet.address && (
+        <WalletMenu
+          address={state.wallet.address}
+          onClose={() => setMenuOpen(false)}
+          onLocked={() => { setMenuOpen(false); setMessages([]); void refresh(); }}
+        />
+      )}
     </div>
   );
 }
