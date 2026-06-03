@@ -127,11 +127,11 @@ Open app
 
 ---
 
-### M2 — Per-user in-app wallet ◑  *(M2a engine ✅ verified · M2b UI next)*
+### M2 — Per-user in-app wallet ✅  *(M2a engine + M2b UI both done)*
 **Goal:** replace the shared `.env` mnemonic with a wallet the user creates/imports + secures in-app. (See §1.)
 
 **✅ M2a (engine) — built & verified.** `src/core/keystore.ts` (ethers' audited encrypted-keystore JSON — no custom crypto; mnemonic round-trips, address readable while locked, wrong-pw rejected). `src/core/config.ts` made the mnemonic optional + added Sepolia/USD₮ defaults (boots with no `.env`). `src/web/server.ts` refactored: router warms independently; **buyer + storefront built on unlock**; endpoints `/api/wallet` `/wallet/create` `/import` `/unlock` `/lock` `/export`; `/api/ask` + `/api/state` gated on unlock; **`.env` mnemonic auto-unlocks in dev only**. HTTP-verified: create→lock→unlock cycle, wrong-pw 401, locked `/api/ask` 401, free answer while unlocked. **Decisions locked:** password everywhere (OS-keychain "remember me" optional in Electron); `.env` = dev-only; one wallet per person serves both roles (seller earns into it). Password ≥ 8 chars.
-**◑ M2b (wallet screens) — built, pending visual check.** `app/src/components/WalletGate.tsx` (choose → create → 12-word backup / import / unlock, password ≥ 8) + `WalletMenu.tsx` (address + copy, faucet links, reveal recovery phrase, lock); `App.tsx` gates the chat behind unlock (boot splash → gate → app); `Rail.tsx` "manage" opens the menu. Engine escape hatch `CONDUIT_NO_ENV_WALLET=1` forces the real onboarding even in dev.
+**✅ M2b (wallet screens) — built & verified.** `app/src/components/WalletGate.tsx` (choose → create → 12-word backup / import / unlock, password ≥ 8) + `WalletMenu.tsx` (address + copy, faucet links, **password-gated** recovery-phrase reveal, lock); `App.tsx` gates the chat behind unlock (boot splash → gate → app); `Rail.tsx` "manage" opens the menu. Revealing the seed re-verifies the password by re-decrypting the keystore (`POST /api/wallet/export`). Engine escape hatch `CONDUIT_NO_ENV_WALLET=1` forces the real onboarding even in dev.
 
 **Tasks:**
 - [ ] `src/core/keystore.ts` — generate BIP-39 seed (WDK), encrypt at rest (web phase: password → scrypt/PBKDF2 + AES-GCM via a vetted lib; Electron: `safeStorage`/keychain). Never log/commit the seed.
