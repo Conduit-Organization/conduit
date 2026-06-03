@@ -81,7 +81,9 @@ export async function createAgent(deps: AgentDeps): Promise<Agent> {
 
       // Delegate the real inference (runs on the seller's GPU, E2E).
       const modelId = await ensureDelegated();
-      const run = sdk.completion({ modelId, history: [{ role: 'user', content: prompt }], stream: true, captureThinking: true, kvCache: false });
+      // reasoning_budget:0 disables hidden <think> so the full budget produces the visible answer
+      // (Qwen3-4B otherwise spends 1024 tokens reasoning on hard prompts and returns nothing).
+      const run = sdk.completion({ modelId, history: [{ role: 'user', content: prompt }], stream: true, captureThinking: true, kvCache: false, generationParams: { predict: 1024, reasoning_budget: 0 } });
       let answer = '';
       for await (const ev of run.events) {
         if (ev.type === 'contentDelta') answer += ev.text;

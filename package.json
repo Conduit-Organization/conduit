@@ -18,6 +18,11 @@
     "buy": "tsx src/node/buy.ts",
     "market": "tsx src/scripts/market-demo.ts",
     "demo": "tsx src/scripts/demo.ts",
+    "web": "tsx src/web/server.ts",
+    "app:install": "npm --prefix app install",
+    "app:dev": "npm --prefix app run dev",
+    "app:build": "npm --prefix app run build",
+    "start": "npm run app:build && npm run web",
     "spike:firewall": "tsx src/spikes/01-firewall/run.ts",
     "spike:settle": "tsx src/spikes/02-settlement/run.ts",
     "spike:delegate": "tsx src/spikes/03-prober-delegate/run.ts"

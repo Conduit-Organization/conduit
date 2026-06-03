@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Conduit</title>
+<style>
+  :root { --ink:#0E1217; --panel:#141b22; --line:#22303a; --mint:#2BE3A8; --text:#E8F1F0; --muted:#8194a0; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { background:var(--ink); color:var(--text); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.3px; }
+  .brand svg { display:block; }
+  .spacer { flex:1; }
+  .wallet { display:flex; gap:18px; align-items:center; font-size:13px; }
+  .wallet b { color:var(--mint); font-variant-numeric:tabular-nums; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:var(--muted); }
+  .pill.privacy { color:var(--mint); border-color:rgba(43,227,168,.35); }
+  main { flex:1; overflow:auto; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 20px 130px; }
+  .hello { color:var(--muted); text-align:center; margin:40px 0 28px; }
+  .hello h1 { color:var(--text); font-size:22px; margin:0 0 6px; font-weight:650; }
+  .msg { margin:14px 0; display:flex; }
+  .msg.me { justify-content:flex-end; }
+  .bubble { max-width:82%; padding:12px 14px; border-radius:14px; white-space:pre-wrap; }
+  .me .bubble { background:#10241d; border:1px solid rgba(43,227,168,.25); }
+  .ai .bubble { background:var(--panel); border:1px solid var(--line); }
+  .meta { margin-top:8px; display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); flex-wrap:wrap; }
+  .badge { border-radius:999px; padding:2px 9px; font-weight:600; font-size:11px; letter-spacing:.2px; }
+  .b-free { background:rgba(43,227,168,.14); color:var(--mint); }
+  .b-paid { background:rgba(255,196,77,.16); color:#ffc44d; }
+  .b-decl { background:rgba(129,148,160,.18); color:var(--muted); }
+  .dots span { animation:blink 1.2s infinite both; } .dots span:nth-child(2){animation-delay:.2s} .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+  footer { position:fixed; bottom:0; left:0; right:0; background:linear-gradient(180deg,transparent,var(--ink) 30%); padding:16px 20px 22px; }
+  .inputbar { max-width:760px; margin:0 auto; display:flex; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:8px 8px 8px 14px; }
+  .inputbar textarea { flex:1; background:transparent; border:0; color:var(--text); resize:none; font:inherit; max-height:140px; outline:none; padding:6px 0; }
+  .send { background:var(--mint); color:#06231a; border:0; border-radius:10px; padding:0 16px; font-weight:700; cursor:pointer; }
+  .send:disabled { opacity:.4; cursor:not-allowed; }
+  .hint { max-width:760px; margin:8px auto 0; color:var(--muted); font-size:12px; text-align:center; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 1000 1000"><path d="M736.4,315.3 A300,300 0 1 0 736.4,684.7" fill="none" stroke="#2BE3A8" stroke-width="92" stroke-linecap="round"/><circle cx="800" cy="500" r="46" fill="#2BE3A8"/></svg>
+      Conduit
+    </div>
+    <div class="spacer"></div>
+    <div class="wallet">
+      <span class="pill">balance <b id="bal">—</b> USD₮</span>
+      <span class="pill">spent <b id="spent">—</b></span>
+      <span class="pill privacy">🔒 <b id="cloud">0</b> bytes to cloud</span>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <div class="hello" id="hello">
+        <h1>Ask anything.</h1>
+        <div>Easy questions are answered <b style="color:var(--mint)">free</b> on your device. Hard ones quietly pay a peer's GPU a fraction of a cent in USD₮ — privately, no cloud. <span id="warm">warming up…</span></div>
+      </div>
+      <div id="thread"></div>
+    </div>
+  </main>
+  <footer>
+    <div class="inputbar">
+      <textarea id="q" rows="1" placeholder="Ask Conduit…"></textarea>
+      <button class="send" id="send">Send</button>
+    </div>
+    <div class="hint" id="model">—</div>
+  </footer>
+<script>
+const $ = s => document.querySelector(s);
+const thread = $('#thread');
+let busy = false;
+
+async function refreshState() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    $('#bal').textContent = (+s.buyer.usdt).toFixed(2);
+    $('#spent').textContent = (+s.spent).toFixed(2);
+    $('#cloud').textContent = s.cloudBytes;
+    $('#model').textContent = `seller model: ${s.sellerModel} · ${s.price} USD₮ / escalation`;
+    $('#warm').textContent = s.ready ? 'ready.' : (s.setupErr ? 'setup error: ' + s.setupErr : 'warming up the local model…');
+  } catch {}
+}
+
+function addMsg(role, html) {
+  const m = document.createElement('div');
+  m.className = 'msg ' + (role === 'me' ? 'me' : 'ai');
+  m.innerHTML = `<div class="bubble">${html}</div>`;
+  thread.appendChild(m);
+  window.scrollTo(0, document.body.scrollHeight);
+  return m;
+}
+const esc = t => t.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function ask() {
+  const q = $('#q').value.trim();
+  if (!q || busy) return;
+  busy = true; $('#send').disabled = true; $('#q').value = ''; $('#hello').style.display = 'none';
+  addMsg('me', esc(q));
+  const pending = addMsg('ai', '<span class="dots"><span>●</span><span>●</span><span>●</span></span>');
+  try {
+    const r = await (await fetch('/api/ask', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({prompt:q}) })).json();
+    if (r.error) { pending.querySelector('.bubble').innerHTML = '⚠️ ' + esc(r.error); }
+    else {
+      const badge = r.source === 'paid'
+        ? `<span class="badge b-paid">PAID · ${r.cost} USD₮</span>`
+        : r.source === 'declined'
+        ? `<span class="badge b-decl">budget reached → local</span>`
+        : `<span class="badge b-free">FREE · local</span>`;
+      const stats = r.source === 'paid' && r.stats.tps ? `· ${(+r.stats.tps).toFixed(0)} tok/s` : '';
+      pending.querySelector('.bubble').innerHTML =
+        esc(r.answer) + `<div class="meta">${badge}<span>confidence ${r.consistency}</span><span>${stats}</span><span>🔒 0 cloud bytes</span></div>`;
+    }
+  } catch (e) { pending.querySelector('.bubble').textContent = '⚠️ ' + e; }
+  busy = false; $('#send').disabled = false; refreshState();
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+$('#send').onclick = ask;
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+$('#q').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; });
+refreshState(); setInterval(refreshState, 4000);
+</script>
+</body>
+</html>

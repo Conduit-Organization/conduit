@@ -66,6 +66,10 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
       stream: true,
       captureThinking: true, // separate Qwen3 <think> from the actual answer
       kvCache: false, // each self-consistency sample is an INDEPENDENT attempt — no shared/growing KV cache
+      // reasoning_budget:0 disables Qwen3 <think> so the whole budget goes to the ANSWER — without it a
+      // small thinking model can burn every token reasoning and emit nothing. predict caps the answer
+      // length; short answers stop at EOS well before it, so easy questions stay fast.
+      generationParams: { predict: 512, reasoning_budget: 0 },
     });
     let content = '', thinking = '';
     for await (const ev of run.events) {
@@ -86,9 +90,19 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
         samples.push(content);
         log(`    sample ${i + 1}: ${content.slice(0, 70).replace(/\s+/g, ' ')}…`);
       }
+      // A small thinking model can spend its whole token budget reasoning and emit no answer.
+      // Empty/degenerate output is NOT confidence — if too few samples produced real content,
+      // escalate to a capable peer rather than return a blank reply. The draft is always the
+      // first NON-empty sample so we never surface "" as the local answer.
+      const nonEmpty = samples.filter((s) => s.trim().length > 0);
+      const draft = nonEmpty[0] ?? '';
+      if (nonEmpty.length < Math.max(2, Math.ceil(k / 2))) {
+        return { decision: 'escalate', consistency: 0, samples, draft, thinking: firstThinking || undefined };
+      }
+
       const vecs: number[][] = [];
-      for (const s of samples) {
-        const r = await sdk.embed({ modelId: embId, text: (s || ' ').slice(0, cap) });
+      for (const s of nonEmpty) {
+        const r = await sdk.embed({ modelId: embId, text: s.slice(0, cap) });
         vecs.push(r.embedding as number[]);
       }
       const consistency = meanPairwiseCosine(vecs);
@@ -96,7 +110,7 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
         decision: consistency < threshold ? 'escalate' : 'local',
         consistency,
         samples,
-        draft: samples[0] ?? '',
+        draft,
         thinking: firstThinking || undefined,
       };
     },
