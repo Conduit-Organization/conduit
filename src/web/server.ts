@@ -24,7 +24,16 @@ const { createAgent } = await import('../buy/agent');
 const here = path.dirname(fileURLToPath(import.meta.url));
 const providerScript = path.join(here, '../sell/provider.ts');
 const appDist = path.join(here, '../../app/dist'); // built React app (npm run app:build)
-const legacyHtml = path.join(here, 'public', 'index.html'); // pre-build fallback page
+
+// Shown only when the React app hasn't been built yet (app/dist missing) — a short prompt, not a 404.
+const buildPrompt = `<!doctype html><html><head><meta charset="utf-8"><title>Conduit</title>
+<style>html,body{height:100%;margin:0}body{background:#0E1217;color:#E7F0EF;font:16px/1.6 system-ui,-apple-system,sans-serif;display:grid;place-items:center}
+.c{max-width:460px;padding:32px;text-align:center}h1{color:#2BE3A8;font-weight:600;margin:0 0 14px}
+code{background:#16202b;border:1px solid #22303a;border-radius:6px;padding:3px 9px;color:#2BE3A8;font-family:ui-monospace,monospace;font-size:14px}
+p{color:#8A9AA6;margin:10px 0}</style></head>
+<body><div class="c"><h1>⬡ Conduit</h1><p>The web UI isn't built yet. Run:</p>
+<p><code>npm run app:install</code></p><p><code>npm run app:build</code></p>
+<p>then refresh — or <code>npm run start</code> to build &amp; serve in one step.</p></div></body></html>`;
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -106,13 +115,13 @@ function serveStatic(res: http.ServerResponse, pathname: string): boolean {
   return true;
 }
 
-// Serve the consumer UI: built React app if present (SPA fallback to index.html),
-// else the legacy single-file page so `npm run web` works before `npm run app:build`.
+// Serve the consumer UI: built React app if present (SPA fallback to its index.html),
+// else a short build-prompt page so `npm run web` before `npm run app:build` is self-explanatory.
 function serveApp(res: http.ServerResponse, pathname: string) {
   if (serveStatic(res, pathname)) return;
   if (existsSync(path.join(appDist, 'index.html'))) { serveStatic(res, '/'); return; }
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(readFileSync(legacyHtml));
+  res.end(buildPrompt);
 }
 
 const server = http.createServer((req, res) => {
@@ -160,7 +169,7 @@ server.listen(PORT, () => {
   const built = existsSync(path.join(appDist, 'index.html'));
   console.log(`\n  ⬡ Conduit — open  →  http://localhost:${PORT}\n`);
   console.log(`  buyer ${buyer.address} · seller model ${sellerModel} · ${formatUnits(PRICE, DEC)} USD₮/escalation`);
-  if (!built) console.log('  note: React app not built — serving the basic page. Run `npm run app:build` for the full UI.');
+  if (!built) console.log('  note: React app not built — run `npm run app:build` for the UI (showing a build prompt until then).');
   console.log('  warming up the local model + seller…\n');
   void ensureAgent(); // warm in background so the first question is fast
 });
