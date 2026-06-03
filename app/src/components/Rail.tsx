@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { State } from '../api';
+import type { State, Peer } from '../api';
 import { Mark, Lock } from './icons';
+import Marketplace from './Marketplace';
 
 function fmt(n: string | number, dp = 2): string {
   const v = Number(n);
@@ -10,17 +11,22 @@ function short(addr: string): string {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '—';
 }
 
-export default function Rail({ state, flash }: { state: State | null; flash: boolean }) {
+export default function Rail({
+  state,
+  sellers,
+  flash,
+  onSelect,
+}: {
+  state: State | null;
+  sellers: Peer[];
+  flash: boolean;
+  onSelect: (id: string) => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   const spent = state ? Number(state.spent) : 0;
   const budget = state ? Number(state.budget) : 1;
   const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
-
-  const ready = !!state?.ready;
-  const err = state?.setupErr;
-  const dotClass = err ? 'err' : ready ? 'on' : 'warm';
-  const peerStatus = err ? 'peer error' : ready ? 'peer online' : 'warming up…';
 
   function copy() {
     if (!state) return;
@@ -73,25 +79,7 @@ export default function Rail({ state, flash }: { state: State | null; flash: boo
         </div>
       </section>
 
-      <section className="card rise" style={{ animationDelay: '250ms' }}>
-        <div className="card-label">
-          <span>Peer GPU</span>
-        </div>
-        <div className="peer-row">
-          <i className={`dot ${dotClass}`} />
-          <span className="peer-status">{peerStatus}</span>
-        </div>
-        <div className="peer-meta">
-          <div className="kv">
-            <span>model</span>
-            <span className="model">{state?.sellerModel ?? '—'}</span>
-          </div>
-          <div className="kv">
-            <span>price</span>
-            <span>{state ? `${fmt(state.price)} USD₮ / escalation` : '—'}</span>
-          </div>
-        </div>
-      </section>
+      <Marketplace state={state} sellers={sellers} onSelect={onSelect} />
 
       <div className="spacer" />
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ask, getState, type State } from './api';
+import { ask, getState, getSellers, selectSeller, type Peer, type State } from './api';
 import type { ChatMsg } from './types';
 import Rail from './components/Rail';
 import Thread from './components/Thread';
@@ -7,6 +7,7 @@ import Composer from './components/Composer';
 
 export default function App() {
   const [state, setState] = useState<State | null>(null);
+  const [sellers, setSellers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -29,7 +30,21 @@ export default function App() {
     } catch {
       /* engine still booting — keep last good state */
     }
+    try {
+      const sl = await getSellers();
+      setSellers(sl.sellers);
+    } catch {
+      /* keep last seller list */
+    }
   }, []);
+
+  const onSelect = useCallback(
+    async (id: string) => {
+      try { await selectSeller(id); } catch { /* ignore */ }
+      void refresh();
+    },
+    [refresh],
+  );
 
   useEffect(() => {
     void refresh();
@@ -75,7 +90,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Rail state={state} flash={flash} />
+      <Rail state={state} sellers={sellers} flash={flash} onSelect={onSelect} />
       <main className="main">
         <Thread messages={messages} onExample={send} />
         <Composer
