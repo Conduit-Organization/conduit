@@ -151,6 +151,8 @@ Open app
 ### M3 — Electron packaging (one-click, no terminal) ⬜
 **Goal:** a double-click desktop app; no Node/terminal needed.
 
+> **Handoff:** see **`docs/M3-HANDOFF.md`** — M3 is built by the teammate on the MacBook (**build-only**: keep it compiling, push; all functional testing happens on the Linux GPU machine). The handoff doc is self-contained for a fresh Claude Code session.
+
 **Tasks:**
 - [ ] `electron/` — `main.ts` spawns the engine as a child (bundled Node), waits for `ready`, opens a `BrowserWindow` on the local app; `preload.ts`; single-instance lock; graceful engine shutdown (fixes the orphaned-seller teardown).
 - [ ] `electron-builder` config → Linux (AppImage/deb) + macOS (dmg). Bundle engine + `node_modules` incl. **native** (`bare-runtime-*`, `rocksdb`) via `asarUnpack`; verify native loads in the packaged app (the fiddly part).
