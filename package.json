@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Conduit — a serverless P2P inference market where a settled USD₮ payment is the access handshake.",
   "license": "Apache-2.0",
+  "main": "electron/dist/main.js",
   "engines": {
     "node": ">=22"
   },
@@ -23,9 +24,39 @@
     "app:dev": "npm --prefix app run dev",
     "app:build": "npm --prefix app run build",
     "start": "npm run app:build && npm run web",
+    "engine:build": "node scripts/build-engine.mjs",
+    "electron:build": "tsc -p electron && node scripts/electron-pkg.mjs",
+    "electron:dev": "npm run app:build && npm run electron:build && electron electron/dist/main.js",
+    "dist": "npm run app:build && npm run engine:build && npm run electron:build && electron-builder",
+    "dist:dir": "npm run app:build && npm run engine:build && npm run electron:build && electron-builder --dir",
     "spike:firewall": "tsx src/spikes/01-firewall/run.ts",
     "spike:settle": "tsx src/spikes/02-settlement/run.ts",
     "spike:delegate": "tsx src/spikes/03-prober-delegate/run.ts"
+  },
+  "build": {
+    "appId": "org.conduit.app",
+    "productName": "Conduit",
+    "_comment": "M3c packaging. asar:false (everything on disk) so the engine child — spawned as a separate Node process via ELECTRON_RUN_AS_NODE — can resolve native node_modules (bare-runtime-*, rocksdb, @qvac/sdk) by normal walk-up. asar+asarUnpack is a later size optimization; correctness first. Build the mac dmg ON the Mac (native modules don't cross-compile); Linux artifacts on Linux. This config is the coordinated-smoke-test starting point.",
+    "asar": false,
+    "files": [
+      "electron/dist/**/*",
+      "dist-engine/**/*",
+      "app/dist/**/*",
+      "bench-profile.json",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.developer-tools",
+      "identity": null
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development"
+    }
   },
   "dependencies": {
     "@qvac/sdk": "^0.12.0",
@@ -37,6 +68,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   }

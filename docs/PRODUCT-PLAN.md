@@ -148,23 +148,29 @@ Open app
 
 ---
 
-### M3 — Electron packaging (one-click, no terminal) ⬜
+### M3 — Electron packaging (one-click, no terminal) ◑  *(M3a + M3b built; M3c code-complete — all build-only, the packaging artifact + Linux GPU run are the coordinated smoke-test)*
 **Goal:** a double-click desktop app; no Node/terminal needed.
 
 > **Handoff:** see **`docs/M3-HANDOFF.md`** — M3 is built by the teammate on the MacBook (**build-only**: keep it compiling, push; all functional testing happens on the Linux GPU machine). The handoff doc is self-contained for a fresh Claude Code session.
 
-**Tasks:**
-- [ ] `electron/` — `main.ts` spawns the engine as a child (bundled Node), waits for `ready`, opens a `BrowserWindow` on the local app; `preload.ts`; single-instance lock; graceful engine shutdown (fixes the orphaned-seller teardown).
-- [ ] `electron-builder` config → Linux (AppImage/deb) + macOS (dmg). Bundle engine + `node_modules` incl. **native** (`bare-runtime-*`, `rocksdb`) via `asarUnpack`; verify native loads in the packaged app (the fiddly part).
-- [ ] Model cache path in a packaged app (app-data dir) + **first-run download progress UI** (4B ≈ 2.5 GB).
-- [ ] Wallet store → Electron `safeStorage`/keychain.
-- [ ] **Role toggle (decided):** one app, switchable **Buyer ⇄ Seller** ("Ask & Pay" / "Share your GPU & Earn"). Seller mode = benchmark → pick model → go online → earnings/status screen.
-- [ ] **Buyer flow (Binance-P2P-style, see §3.5):** Marketplace is the buyer's **landing screen** (browse sellers: model · price · tps · reputation · online) → pick a seller or "Auto" → enter **chat**; a back button returns to the marketplace to switch.
-- [ ] **Bookmarks/favorites (new feature):** ★ a seller → saved list persisted locally (by seller key); shows live online/offline status; one-tap re-select. (Reputation overlay lands in M4.)
-- [ ] Tray icon, app lifecycle, auto-update (optional).
-- [ ] macOS code-signing/notarization — **may defer** (unsigned dmg + Gatekeeper allow) for testnet/internal use; note the limitation.
+**◑ M3a (Electron shell) — built (compiles; functional check pending on Linux GPU box).** New top-level `electron/`: `main.ts` (single-instance lock → pick a free port [honors `PORT`, else probes 8788+, falls back to ephemeral] → spawn the engine as a `detached` child in its own process group so the whole tree incl. the Bare worker is killable [gotcha #6] → poll `/api/wallet` until ready → open `BrowserWindow`; graceful shutdown = SIGTERM group → wait → SIGKILL; external links open in the system browser; `app.isPackaged` seam for the packaged spawn), `preload.ts` (`contextIsolation`-safe `window.conduit`), `electron/tsconfig.json` (→ CommonJS in `electron/dist/`). Dev runs the engine from source via `node --import tsx src/web/server.ts`. Root scripts: `electron:build`, `electron:dev`. `npm run web` unchanged.
 
-**Acceptance:** install the artifact on a clean machine with **no Node**, run, create wallet, ask, and pay a remote seller.
+**◑ M3b (product screens + seller mode) — built (compiles; functional check pending on Linux GPU box).** **Engine:** `src/web/seller.ts` (new) manages the proven `sell.ts` as a child — spawn/kill (detached group → kills the Bare-worker grandchild) + parses stdout for the live offer/`GRANTED` count + reads on-chain earnings delta; `sell.ts` one-line change to take the wallet from `CONDUIT_SELLER_MNEMONIC` (engine injects the unlocked wallet; earns into account #1); new endpoints `/api/seller/{status,start,stop,profile}`; shutdown stops the seller too. **UI:** `TopBar` (Buyer⇄Seller role toggle, persisted) · full-screen `MarketplaceScreen` landing (browse · ★bookmark · Auto · select→chat) · `SellerScreen` (offer → Go online/offline → requests/earnings) · `bookmarks.ts` (**keyed by wallet `address`, not `id`** — gotcha #9) · chat keeps the compact Rail + a back button. `App.tsx` orchestrates role/view + seller-status polling.
+
+**◑ M3c (packaging) — code-complete; the artifact build + smoke-test are the coordinated run.** **Engine bundling:** `scripts/build-engine.mjs` (esbuild → `dist-engine/server.mjs` + `sell.mjs`, deps kept external) so the packaged app needs no `tsx`; `electron/main.ts` packaged branch spawns it with Electron's Node (`ELECTRON_RUN_AS_NODE=1`) and `src/web/seller.ts` spawns the compiled seller via `CONDUIT_SELLER_ENTRY`; the engine finds assets via `CONDUIT_RESOURCES`. **`electron-builder` config** (package.json `build`): mac `dmg` (unsigned, `identity:null`) + Linux `AppImage`/`deb`; `asar:false` (everything on disk so the Node child resolves native modules by walk-up — `asar`+`asarUnpack` is a later size optimization). **First-run model progress:** router emits `onProgress` → engine SSE `/api/model/progress` + `/api/state` snapshot → `ModelBanner` UI. **"Remember on this device":** Electron `safeStorage` (OS keychain) via preload `window.conduit.secret` + `WalletGate` checkbox + once-per-session auto-unlock; degrades to hidden in a plain browser. Scripts: `engine:build`, `dist`, `dist:dir`. **Not yet run here:** `electron-builder` artifact build + the on-hardware smoke-test (per handoff, that step needs a coordinated run; the mac dmg must be built on the Mac, Linux artifacts on Linux).
+
+**Tasks:**
+- [x] **M3a** `electron/` — `main.ts` spawns the engine as a child, waits for `ready` (polls `/api/wallet`), opens a `BrowserWindow`; `preload.ts`; single-instance lock; graceful engine shutdown (process-group kill fixes the orphaned-seller teardown).
+- [x] **M3c** `electron-builder` config → Linux (AppImage/deb) + macOS (dmg); engine bundled via esbuild + spawned with Electron's Node; native modules resolved on disk (`asar:false`). *(Artifact build is the coordinated run.)*
+- [x] **M3c** First-run model **download/warm progress** (router `onProgress` → SSE + `/api/state` → `ModelBanner`). Model cache stays in `~/.qvac` (fine for packaged apps).
+- [x] **M3c** Wallet store → Electron `safeStorage`/keychain ("remember on this device" + auto-unlock).
+- [x] **M3b** **Role toggle:** one app, switchable **Buyer ⇄ Seller** ("Ask & Pay" / "Share your GPU & Earn"). Seller mode = offer (from bench profile) → go online → earnings/status screen.
+- [x] **M3b** **Buyer flow (Binance-P2P-style, §3.5):** Marketplace is the buyer's **landing screen** → pick a seller or "Auto" → enter **chat**; a back button returns to the marketplace.
+- [x] **M3b** **Bookmarks/favorites:** ★ a seller → saved list persisted locally (**by wallet address**); live online/offline status; one-tap re-select. (Reputation overlay lands in M4.)
+- [ ] Tray icon, app lifecycle, auto-update (optional). *(deferred — optional)*
+- [x] macOS code-signing/notarization — **deferred** (unsigned dmg + Gatekeeper allow), per locked decision §6.4.
+
+**Acceptance:** install the artifact on a clean machine with **no Node**, run, create wallet, ask, and pay a remote seller. *(Requires the coordinated packaging run + on-hardware test.)*
 
 **Risks:** native-module packaging across OSes; macOS notarization; bundle size; download UX.
 
