@@ -30,6 +30,14 @@ export interface State {
   selected?: string;
   ready: boolean;
   setupErr: string | null;
+  modelProgress?: ModelProgress;
+}
+
+export interface ModelProgress {
+  phase: 'warming' | 'downloading' | 'ready' | 'error';
+  model?: string;
+  percentage?: number;
+  message?: string;
 }
 
 export interface SellersResp {
@@ -45,6 +53,36 @@ export interface AskResult {
   cost: string;
   stats: { ttftMs: number | null; tps: number | null };
   error?: string;
+}
+
+export interface SellerStatus {
+  running: boolean;
+  online: boolean;
+  model: string | null;
+  price: string | null; // base-units
+  tps: number | null;
+  address: string | null;
+  requestsServed: number;
+  earned: string | null; // base-units, on-chain delta since going online
+  startedAt: number | null;
+  error: string | null;
+}
+
+export interface SellerOfferProfile {
+  model: string;
+  price: string; // human USD₮
+  priceBaseUnits: string;
+  tps: number;
+}
+
+export interface SellerProfile {
+  backend: string | null;
+  platform: string | null;
+  topSellable: string | null;
+  localDraft: string | null;
+  ts: string | null;
+  offer: SellerOfferProfile | null;
+  models: { id: string; loaded: boolean; tps: number | null; backend: string | null }[];
 }
 
 async function postJson(url: string, body: unknown): Promise<any> {
@@ -81,6 +119,24 @@ export async function ask(prompt: string): Promise<AskResult> {
     body: JSON.stringify({ prompt }),
   });
   return r.json();
+}
+
+// ---- seller mode ----
+export async function getSellerStatus(): Promise<SellerStatus> {
+  const r = await fetch('/api/seller/status');
+  if (!r.ok) throw new Error(`seller status ${r.status}`);
+  return r.json();
+}
+export async function getSellerProfile(): Promise<SellerProfile> {
+  const r = await fetch('/api/seller/profile');
+  if (!r.ok) throw new Error(`seller profile ${r.status}`);
+  return r.json();
+}
+export async function startSeller(): Promise<SellerStatus> {
+  return postJson('/api/seller/start', {});
+}
+export async function stopSeller(): Promise<void> {
+  await postJson('/api/seller/stop', {});
 }
 
 // ---- wallet ----

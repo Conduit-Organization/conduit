@@ -25,7 +25,15 @@ const { send, onMessages, bindMessage } = await import('../core/protocol');
 const sdk: any = await import('@qvac/sdk');
 
 const cfg = loadConfig();
-const seller = await getAccount(cfg.mnemonic, cfg.rpcUrl, 1); // seller wallet = account 1
+// Wallet source: the engine (seller mode) injects the unlocked wallet via CONDUIT_SELLER_MNEMONIC;
+// the CLI/demo path falls back to the .env dev mnemonic. Account 1 = the seller's earnings address
+// (must differ from the buyer's account 0 so a single machine can buy from its own seller).
+const sellerMnemonic = process.env.CONDUIT_SELLER_MNEMONIC || cfg.mnemonic;
+if (!sellerMnemonic) {
+  console.error('[seller] no wallet mnemonic — set CONDUIT_SELLER_MNEMONIC (engine passes the unlocked wallet) or a .env mnemonic');
+  process.exit(1);
+}
+const seller = await getAccount(sellerMnemonic, cfg.rpcUrl, 1); // seller earnings = account 1 of the wallet
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let offer = { model: 'QWEN3_4B_INST_Q4_K_M', priceBaseUnits: priceFor('QWEN3_4B_INST_Q4_K_M'), tps: 0 };

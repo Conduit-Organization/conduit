@@ -23,11 +23,17 @@ const { SpendPolicy } = await import('../buy/policy');
 const { createRouter } = await import('../buy/router');
 const { createStorefront } = await import('../buy/storefront');
 const { createMarketAgent } = await import('../buy/market-agent');
+const { createSellerManager } = await import('./seller');
+const { offerFromProfile } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
 const sdk: any = await import('@qvac/sdk');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const appDist = path.join(here, '../../app/dist'); // built React app (npm run app:build)
+// Where the static assets + bench profile live. In dev this resolves to the repo root (here =
+// src/web). In the packaged app the engine runs as a compiled bundle from a different dir, so
+// Electron passes CONDUIT_RESOURCES pointing at the bundled resources (see electron/main.ts).
+const RESOURCES = process.env.CONDUIT_RESOURCES || path.join(here, '../..');
+const appDist = path.join(RESOURCES, 'app/dist'); // built React app (npm run app:build)
 
 // Shown only when the React app hasn't been built yet (app/dist missing) — a short prompt, not a 404.
 const buildPrompt = `<!doctype html><html><head><meta charset="utf-8"><title>Conduit</title>
@@ -60,6 +66,38 @@ const MIN_PW = 8;
 const cfg = loadConfig();
 const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
 
+// Seller mode: the engine manages the proven sell.ts as a child (spawn/kill/inspect). It earns into
+// account index 1 of the unlocked wallet (distinct from the buyer's index 0). See src/web/seller.ts.
+const seller = createSellerManager({
+  repoRoot: RESOURCES,
+  rpcUrl: cfg.rpcUrl,
+  usdtAddress: cfg.usdtAddress,
+  makeEarningsAccount: (m: string) => getAccount(m, cfg.rpcUrl, 1),
+  log: (msg) => console.log(msg),
+});
+
+// The seller's offer + this machine's capability profile (read from bench-profile.json), so the
+// seller screen can show "you'll offer Qwen3 4B @ 0.01 · ~59 tps" before going online.
+function sellerProfile() {
+  try {
+    const profile = JSON.parse(readFileSync(path.join(RESOURCES, 'bench-profile.json'), 'utf8'));
+    const o = offerFromProfile(profile);
+    return {
+      backend: profile.backend ?? null,
+      platform: profile.platform ?? null,
+      topSellable: profile.topSellable ?? null,
+      localDraft: profile.localDraft ?? null,
+      ts: profile.ts ?? null,
+      offer: o
+        ? { model: o.model, price: formatUnits(o.priceBaseUnits, DEC), priceBaseUnits: o.priceBaseUnits.toString(), tps: o.tps }
+        : null,
+      models: (profile.models ?? []).map((m: any) => ({ id: m.id, loaded: !!m.loaded, tps: m.tps ?? null, backend: m.backend ?? null })),
+    };
+  } catch {
+    return { backend: null, platform: null, topSellable: null, localDraft: null, ts: null, offer: null, models: [] };
+  }
+}
+
 // ---- wallet + dependent services (buyer / storefront / agent are built on unlock) ----
 let wallet: { mnemonic: string; address: string } | null = null;
 let buyer: any = null;
@@ -67,12 +105,29 @@ let storefront: any = null;
 let agent: any = null;
 let setupErr: string | undefined;
 
+// First-run model download/warm progress, surfaced to the UI (a multi-GB local model otherwise
+// looks like a silent hang). Pushed live over SSE (/api/model/progress) + snapshotted in /api/state.
+type ModelProgress = { phase: 'warming' | 'downloading' | 'ready' | 'error'; model?: string; percentage?: number; message?: string };
+let modelProgress: ModelProgress = { phase: 'warming' };
+const progressClients = new Set<http.ServerResponse>();
+function setProgress(p: ModelProgress) {
+  modelProgress = p;
+  const line = `data: ${JSON.stringify(p)}\n\n`;
+  for (const c of progressClients) { try { c.write(line); } catch { /* client gone */ } }
+}
+
 // The local router warms independently of the wallet (free, on-device answers need no key).
 let router: any = null;
 let routerReady = false;
 const routerPromise = (async () => {
-  try { router = await createRouter({ k: 5 }); routerReady = true; }
-  catch (e: any) { setupErr = String(e?.message ?? e); }
+  try {
+    router = await createRouter({ k: 5, onProgress: (pr) => setProgress({ phase: 'downloading', model: pr.model, percentage: pr.percentage }) });
+    routerReady = true;
+    setProgress({ phase: 'ready' });
+  } catch (e: any) {
+    setupErr = String(e?.message ?? e);
+    setProgress({ phase: 'error', message: setupErr });
+  }
 })();
 
 async function unlockWith(mnemonic: string): Promise<string> {
@@ -200,11 +255,20 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // ---------- model load progress (SSE) ----------
+    if (req.method === 'GET' && p === '/api/model/progress') {
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+      res.write(`data: ${JSON.stringify(modelProgress)}\n\n`);
+      progressClients.add(res);
+      req.on('close', () => progressClients.delete(res));
+      return;
+    }
+
     // ---------- state ----------
     if (req.method === 'GET' && p === '/api/state') {
       const w = walletStatus();
       if (!wallet) {
-        json(res, 200, { wallet: w, ready: false, sellersOnline: 0, peer: null, selected: 'auto', setupErr: setupErr ?? null });
+        json(res, 200, { wallet: w, ready: false, sellersOnline: 0, peer: null, selected: 'auto', setupErr: setupErr ?? null, modelProgress });
         return;
       }
       const active = storefront.getActive();
@@ -222,6 +286,7 @@ const server = http.createServer((req, res) => {
         selected: storefront.selectedId(),
         ready: routerReady && !setupErr,
         setupErr: setupErr ?? null,
+        modelProgress,
       });
       return;
     }
@@ -237,6 +302,27 @@ const server = http.createServer((req, res) => {
       const { id } = await readBody(req);
       const active = storefront.select(id || 'auto');
       json(res, 200, { ok: true, selected: storefront.selectedId(), active: active ? offerJson(active) : null });
+      return;
+    }
+
+    // ---------- seller mode ----------
+    if (req.method === 'GET' && p === '/api/seller/status') {
+      json(res, 200, seller.status());
+      return;
+    }
+    if (req.method === 'GET' && p === '/api/seller/profile') {
+      json(res, 200, sellerProfile());
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/seller/start') {
+      if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
+      try { json(res, 200, await seller.start(wallet.mnemonic)); }
+      catch (e: any) { json(res, 500, { error: String(e?.message ?? e) }); }
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/seller/stop') {
+      await seller.stop();
+      json(res, 200, { ok: true });
       return;
     }
 
@@ -274,6 +360,7 @@ server.listen(PORT, () => {
 });
 
 async function shutdown() {
+  try { await seller.stop(); } catch {}
   try { lock(); } catch {}
   try { await sdk.close?.(); } catch {}
   process.exit(0);

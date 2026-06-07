@@ -14,6 +14,11 @@ export interface RouteResult {
   thinking?: string;
 }
 
+export interface ModelLoadProgress {
+  model: string; // model constant being fetched
+  percentage: number; // 0..100
+}
+
 export interface RouterOptions {
   localModel?: string; // model-constant name
   embedModel?: string;
@@ -21,6 +26,7 @@ export interface RouterOptions {
   threshold?: number; // escalate if consistency < threshold
   maxOutputChars?: number; // cap text before embedding
   log?: (m: string) => void;
+  onProgress?: (p: ModelLoadProgress) => void; // first-run model download progress (for the UI)
 }
 
 export interface Router {
@@ -56,8 +62,9 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
   const cap = opts.maxOutputChars ?? 1500;
   const log = opts.log ?? (() => {});
 
-  const llmId = await sdk.loadModel({ modelSrc: sdk[localModel], modelType: 'llm', modelConfig: { ctx_size: 8192 } });
-  const embId = await sdk.loadModel({ modelSrc: sdk[embedModel] });
+  const onProg = (model: string) => (p: any) => opts.onProgress?.({ model, percentage: Number(p?.percentage ?? 0) });
+  const llmId = await sdk.loadModel({ modelSrc: sdk[localModel], modelType: 'llm', modelConfig: { ctx_size: 8192 }, onProgress: onProg(localModel) });
+  const embId = await sdk.loadModel({ modelSrc: sdk[embedModel], onProgress: onProg(embedModel) });
 
   async function sampleOnce(prompt: string): Promise<{ content: string; thinking: string }> {
     const run = sdk.completion({
