@@ -1,5 +1,8 @@
 node_modules/
 dist/
+electron/dist/
+dist-engine/
+release/
 *.log
 
 # secrets — never commit
