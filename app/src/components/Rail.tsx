@@ -66,6 +66,11 @@ export default function Rail({
             <span>gas</span>
             <b>{fmt(state?.buyer?.eth, 4)} ETH</b>
           </div>
+          {state?.sessions && state.sessions.length > 0 && (
+            <div className="channel-chip" title="Open payment channel — paid answers are instant (off-chain vouchers)">
+              ⚡ channel · {fmt(state.sessions[0]!.remaining)} USD₮ left
+            </div>
+          )}
         </section>
 
         <section className="card rise" style={{ animationDelay: '180ms' }}>

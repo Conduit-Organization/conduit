@@ -28,9 +28,18 @@ export interface State {
   peer?: Peer | null;
   sellersOnline?: number;
   selected?: string;
+  escrow?: boolean; // escrow (payment-channel) mode is enabled on this engine
+  sessions?: EscrowSession[]; // open payment channels (instant paid answers)
   ready: boolean;
   setupErr: string | null;
   modelProgress?: ModelProgress;
+}
+
+export interface EscrowSession {
+  seller: string; // seller wallet address
+  deposit: string; // USD₮ locked
+  spent: string; // USD₮ drawn so far
+  remaining: string; // USD₮ left in the channel
 }
 
 export interface ModelProgress {

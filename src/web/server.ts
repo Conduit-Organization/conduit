@@ -23,6 +23,7 @@ const { SpendPolicy } = await import('../buy/policy');
 const { createRouter } = await import('../buy/router');
 const { createStorefront } = await import('../buy/storefront');
 const { createMarketAgent } = await import('../buy/market-agent');
+const { loadEscrowDeployment } = await import('../core/escrow');
 const { createSellerManager } = await import('./seller');
 const { offerFromProfile } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
@@ -65,6 +66,9 @@ const MIN_PW = 8;
 
 const cfg = loadConfig();
 const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
+// Escrow (payment-channel) mode is opt-in: CONDUIT_ESCROW=1 + a deployed contract. The seller child
+// inherits CONDUIT_ESCROW via the spawned env, so enabling it here turns it on for both roles.
+const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : null;
 
 // Seller mode: the engine manages the proven sell.ts as a child (spawn/kill/inspect). It earns into
 // account index 1 of the unlocked wallet (distinct from the buyer's index 0). See src/web/seller.ts.
@@ -132,7 +136,7 @@ const routerPromise = (async () => {
 
 async function unlockWith(mnemonic: string): Promise<string> {
   const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
-  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk });
+  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep });
   buyer = acct;
   storefront = sf;
   agent = null; // (re)created lazily once the router is warm
@@ -284,6 +288,13 @@ const server = http.createServer((req, res) => {
         peer: active ? offerJson(active) : null,
         sellersOnline: storefront.list().filter((o: any) => o.online).length,
         selected: storefront.selectedId(),
+        escrow: !!escrowDep,
+        sessions: storefront.sessions().map((s: any) => ({
+          seller: s.seller,
+          deposit: formatUnits(BigInt(s.deposit), DEC),
+          spent: formatUnits(BigInt(s.cumulative), DEC),
+          remaining: formatUnits(BigInt(s.remaining), DEC),
+        })),
         ready: routerReady && !setupErr,
         setupErr: setupErr ?? null,
         modelProgress,

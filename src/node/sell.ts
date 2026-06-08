@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import Hyperswarm from 'hyperswarm';
-import { verifyMessage } from 'ethers';
+import { verifyMessage, JsonRpcProvider, HDNodeWallet, type BaseWallet } from 'ethers';
 import { randomSeedHex } from '../core/identity';
 
 const TOPIC = crypto.createHash('sha256').update('conduit:market:v1').digest();
@@ -22,6 +22,7 @@ const { loadConfig } = await import('../core/config');
 const { getAccount } = await import('../core/wallet');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
 const { send, onMessages, bindMessage } = await import('../core/protocol');
+const { createEscrowClient, loadEscrowDeployment } = await import('../core/escrow');
 const sdk: any = await import('@qvac/sdk');
 
 const cfg = loadConfig();
@@ -46,6 +47,30 @@ try {
 const quotes = new Map<string, { balanceBefore: bigint }>();
 const used = new Set<string>();
 let providerPub: string | undefined;
+
+// ── Escrow (payment-channel) mode — opt-in via CONDUIT_ESCROW=1 + a deployed contract. The seller
+// verifies the buyer's on-chain channel, serves per signed voucher, and redeems in the background.
+const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : null;
+const esc = escrowDep ? createEscrowClient(cfg.rpcUrl, escrowDep.address, escrowDep.chainId) : null;
+const escrowWallet: BaseWallet | null = esc
+  ? HDNodeWallet.fromPhrase(sellerMnemonic, undefined, "m/44'/60'/0'/0/1").connect(new JsonRpcProvider(cfg.rpcUrl))
+  : null;
+// buyerWallet(lower) → live session
+const sessions = new Map<string, { buyerPub: string; epoch: bigint; deposit: bigint; cumulative: bigint; lastSig: string; claimed: bigint; claiming: boolean }>();
+const CLAIM_THRESHOLD = 50_000n; // redeem on-chain once unclaimed earnings reach 0.05 USD₮
+
+// Background redeem — never blocks serving the buyer; fire-and-forget when earnings cross the threshold.
+function maybeClaim(buyerWallet: string) {
+  const s = sessions.get(buyerWallet.toLowerCase());
+  if (!s || !esc || !escrowWallet || s.claiming) return;
+  if (s.cumulative - s.claimed < CLAIM_THRESHOLD) return;
+  s.claiming = true;
+  const target = s.cumulative, sig = s.lastSig;
+  esc.claim(escrowWallet, buyerWallet, target, sig)
+    .then((tx) => { s.claimed = target; console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`); })
+    .catch((e: any) => console.log('[seller] claim failed (will retry):', e?.message ?? e))
+    .finally(() => { s.claiming = false; });
+}
 
 // Read the seller's USD₮ balance, surviving transient RPC timeouts (a public testnet RPC blips).
 // A seller daemon must never crash on a flaky balance read — degrade the negotiation instead.
@@ -81,7 +106,7 @@ async function verifyReceipt(m: any): Promise<{ ok: boolean; reason?: string }> 
 const swarm = new Hyperswarm();
 swarm.on('connection', (conn: any) => {
   console.log('[seller] buyer connected on storefront');
-  send(conn, { type: 'offer', sellerWallet: seller.address, model: offer.model, priceBaseUnits: String(offer.priceBaseUnits), tps: offer.tps, token: cfg.usdtAddress, chainId: cfg.chainId });
+  send(conn, { type: 'offer', sellerWallet: seller.address, model: offer.model, priceBaseUnits: String(offer.priceBaseUnits), tps: offer.tps, token: cfg.usdtAddress, chainId: cfg.chainId, ...(escrowDep ? { escrow: escrowDep.address } : {}) });
   onMessages(conn, async (m) => {
     if (m.type === 'quoteReq') {
       const balanceBefore = await balanceOrNull();
@@ -96,6 +121,38 @@ swarm.on('connection', (conn: any) => {
       const pub = await ensureProvider(m.buyerConsumerPub);
       send(conn, { type: 'grant', providerPub: pub });
       console.log('[seller] payment verified → GRANTED, provider', pub.slice(0, 16) + '…');
+    } else if (m.type === 'sessionOpen') {
+      // Verify the buyer's escrow channel on-chain, then grant the gated provider (the channel = the grant).
+      if (!esc) { send(conn, { type: 'reject', reason: 'seller does not accept escrow channels' }); return; }
+      let ch;
+      try { ch = await esc.channel(m.buyerWallet, seller.address); }
+      catch (e: any) { send(conn, { type: 'reject', reason: 'channel read failed: ' + (e?.message ?? e) }); return; }
+      const now = Math.floor(Date.now() / 1000);
+      if (!ch.open) { send(conn, { type: 'reject', reason: 'no open channel' }); return; }
+      if (ch.deposit < offer.priceBaseUnits) { send(conn, { type: 'reject', reason: 'deposit below price' }); return; }
+      if (Number(ch.expiry) <= now) { send(conn, { type: 'reject', reason: 'channel expired' }); return; }
+      if (ch.epoch.toString() !== m.epoch) { send(conn, { type: 'reject', reason: 'epoch mismatch' }); return; }
+      sessions.set(m.buyerWallet.toLowerCase(), { buyerPub: m.buyerConsumerPub, epoch: ch.epoch, deposit: ch.deposit, cumulative: ch.claimed, lastSig: '', claimed: ch.claimed, claiming: false });
+      const pub = await ensureProvider(m.buyerConsumerPub);
+      send(conn, { type: 'sessionGrant', providerPub: pub, epoch: ch.epoch.toString() });
+      console.log(`[seller] channel verified → GRANTED, deposit ${ch.deposit}, provider ${pub.slice(0, 16)}…`);
+    } else if (m.type === 'draw') {
+      // A per-inference voucher: verify the cumulative is signed by the buyer, increasing, and within deposit.
+      if (!esc) { send(conn, { type: 'reject', reason: 'escrow not supported' }); return; }
+      const s = sessions.get(m.buyerWallet.toLowerCase());
+      if (!s) { send(conn, { type: 'reject', reason: 'no session' }); return; }
+      const cumulative = BigInt(m.cumulative);
+      let signer: string;
+      try { signer = esc.recoverVoucher(m.buyerWallet, seller.address, s.epoch, cumulative, m.signature); }
+      catch { send(conn, { type: 'reject', reason: 'bad voucher' }); return; }
+      if (signer.toLowerCase() !== m.buyerWallet.toLowerCase()) { send(conn, { type: 'reject', reason: 'voucher signer mismatch' }); return; }
+      if (cumulative <= s.cumulative) { send(conn, { type: 'reject', reason: 'voucher not increasing' }); return; }
+      if (cumulative > s.deposit) { send(conn, { type: 'reject', reason: 'voucher exceeds deposit' }); return; }
+      s.cumulative = cumulative;
+      s.lastSig = m.signature;
+      send(conn, { type: 'drawAck', cumulative: cumulative.toString() });
+      console.log(`[seller] draw ${cumulative} verified → GRANTED (served)`);
+      maybeClaim(m.buyerWallet);
     }
   });
 });

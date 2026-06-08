@@ -5,6 +5,11 @@ dist-engine/
 release/
 *.log
 
+# hardhat (contracts/) build output — keep the .sol sources + tests, drop generated artifacts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+
 # secrets — never commit
 .env
 .env.local
