@@ -36,7 +36,6 @@
   "build": {
     "appId": "org.conduit.app",
     "productName": "Conduit",
-    "_comment": "M3c packaging. asar:false (everything on disk) so the engine child — spawned as a separate Node process via ELECTRON_RUN_AS_NODE — can resolve native node_modules (bare-runtime-*, rocksdb, @qvac/sdk) by normal walk-up. asar+asarUnpack is a later size optimization; correctness first. Build the mac dmg ON the Mac (native modules don't cross-compile); Linux artifacts on Linux. This config is the coordinated-smoke-test starting point.",
     "asar": false,
     "files": [
       "electron/dist/**/*",
@@ -46,6 +45,7 @@
       "package.json"
     ],
     "directories": {
+      "app": ".",
       "output": "release"
     },
     "mac": {
