@@ -22,6 +22,14 @@ export default function MarketplaceScreen({
   const online = sellers.filter((s) => s.online);
   const byAddr = new Map(sellers.map((s) => [s.address.toLowerCase(), s]));
 
+  // Reputation label from this buyer's own history with the seller.
+  function rep(s: Peer): { label: string; cls: string } {
+    const n = s.served + s.failed;
+    if (n === 0) return { label: 'new peer', cls: 'new' };
+    const pct = Math.round(s.successRate * 100);
+    return { label: `★ ${pct}% · ${s.served} served`, cls: pct >= 90 ? 'good' : pct >= 60 ? 'ok' : 'bad' };
+  }
+
   function toggleMark(s: Peer | bm.Bookmark, e: React.MouseEvent) {
     e.stopPropagation();
     setMarks(bm.toggle({ address: s.address, model: s.model, price: s.price, savedAt: Date.now() }));
@@ -110,6 +118,7 @@ export default function MarketplaceScreen({
                 </div>
                 <div className="ms-sub">{fmt(s.price)} USD₮ · {Math.round(s.tps)} tps</div>
                 <div className="ms-addr">{short(s.address)}</div>
+                <div className={`ms-rep ${rep(s).cls}`}>{rep(s).label}</div>
                 <div className={`ms-state${s.online ? ' on' : ''}`}>
                   {s.online ? (state?.selected === s.id ? '✓ active — tap to use' : 'online — tap to use') : 'offline'}
                 </div>

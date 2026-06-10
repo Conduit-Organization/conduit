@@ -9,6 +9,7 @@ import Hyperswarm from 'hyperswarm';
 import { Wallet as EthWallet, JsonRpcProvider } from 'ethers';
 import { send, onMessages, bindMessage, type Msg } from '../core/protocol';
 import { createEscrowClient, type EscrowClient } from '../core/escrow';
+import type { Reputation } from '../core/reputation';
 import type { ConduitAccount } from '../core/wallet';
 
 const TOPIC = crypto.createHash('sha256').update('conduit:market:v1').digest();
@@ -24,6 +25,10 @@ export interface SellerOffer {
   escrow?: string; // escrow contract address, if this seller accepts payment-channel sessions
   online: boolean;
   lastSeen: number;
+  // first-party reputation (this buyer's own experience with the seller):
+  served: number;
+  failed: number;
+  successRate: number; // [0,1], neutral 0.5 when no history
 }
 
 export interface PurchaseResult {
@@ -62,6 +67,7 @@ export interface StorefrontDeps {
   escrow?: { address: string; chainId: number } | null; // deployed ConduitEscrow (enables channel mode)
   depositBaseUnits?: bigint; // per-channel deposit (default 0.05 USD₮)
   sessionDurationSecs?: number; // channel expiry (default 1h)
+  reputation?: Reputation; // first-party seller reputation (ranks "Auto", shown in the marketplace)
   log?: (m: string) => void;
 }
 
@@ -79,7 +85,7 @@ interface ConnRec {
   pending: Map<string, { resolve: (m: any) => void; reject: (e: Error) => void }>;
 }
 
-// cheapest, then fastest
+// cheapest, then fastest (display order / tiebreak)
 function byPriceThenSpeed(a: SellerOffer, b: SellerOffer): number {
   if (a.priceBaseUnits !== b.priceBaseUnits) return a.priceBaseUnits < b.priceBaseUnits ? -1 : 1;
   return b.tps - a.tps;
@@ -114,7 +120,13 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       const sel = online.find((o) => o.id === selected);
       if (sel) return sel; // selected seller still online
     }
-    return online.sort(byPriceThenSpeed)[0]!; // 'auto' (or selected went offline) → cheapest-then-fastest
+    // 'auto' (or selected went offline) → best reputation, then cheapest, then fastest.
+    return [...online].sort((a, b) => {
+      const sa = deps.reputation?.score(a.sellerWallet) ?? 0.5;
+      const sb = deps.reputation?.score(b.sellerWallet) ?? 0.5;
+      if (Math.abs(sa - sb) > 0.02) return sb - sa; // meaningfully better reputation wins
+      return byPriceThenSpeed(a, b);
+    })[0]!;
   }
 
   function resolvePending(rec: ConnRec, kind: string, m: any) {
@@ -124,6 +136,7 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
 
   function handle(rec: ConnRec, m: Msg) {
     if (m.type === 'offer') {
+      const rep = deps.reputation?.get(m.sellerWallet);
       rec.offer = {
         id: rec.id,
         sellerWallet: m.sellerWallet,
@@ -135,6 +148,9 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
         escrow: m.escrow,
         online: true,
         lastSeen: Date.now(),
+        served: rep?.served ?? 0,
+        failed: rep?.failed ?? 0,
+        successRate: deps.reputation?.successRate(m.sellerWallet) ?? 0.5,
       };
       log(`[storefront] seller ${rec.id.slice(0, 10)}… offers ${m.model} @ ${m.priceBaseUnits} (~${m.tps} tps)${m.escrow ? ' [escrow]' : ''}`);
     } else if (m.type === 'quote') {
@@ -225,6 +241,65 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     return sess;
   }
 
+  // Re-pull a seller's reputation into its live offer so the marketplace reflects the latest outcome.
+  function refreshOfferRep(sellerWallet: string) {
+    const rep = deps.reputation?.get(sellerWallet);
+    for (const c of conns.values()) {
+      if (c.offer && c.offer.sellerWallet.toLowerCase() === sellerWallet.toLowerCase()) {
+        c.offer.served = rep?.served ?? 0;
+        c.offer.failed = rep?.failed ?? 0;
+        c.offer.successRate = deps.reputation?.successRate(sellerWallet) ?? 0.5;
+      }
+    }
+  }
+
+  async function runPurchase(seller: SellerOffer, prompt: string, opts?: { predict?: number }): Promise<PurchaseResult> {
+    const rec = conns.get(seller.id);
+    if (!rec || !rec.offer?.online) throw new Error('seller offline');
+    const conn = rec.conn;
+    const price = seller.priceBaseUnits;
+
+    // ── ESCROW CHANNEL PATH ── (when both sides support it): open once, then instant vouchers.
+    if (esc && escrowWallet && seller.escrow) {
+      const sess = await ensureSession(rec, seller);
+      if (sess.cumulative + price > sess.deposit) {
+        throw new Error('channel deposit exhausted — top up to continue'); // caller falls back to local
+      }
+      sess.cumulative += price; // running total owed
+      const sig = await esc.signVoucher(escrowWallet, seller.sellerWallet, sess.epoch, sess.cumulative);
+      send(conn, { type: 'draw', buyerWallet: escrowWallet.address, cumulative: sess.cumulative.toString(), signature: sig });
+      await waitFor(rec, 'drawAck', 20_000); // seller verified + recorded the voucher (instant)
+      const out = await delegateAndRun(sess.providerPub, seller.model, prompt, opts?.predict);
+      return { ...out, cost: price, via: 'channel', model: seller.model, sellerWallet: seller.sellerWallet };
+    }
+
+    // ── PER-INFERENCE PATH ── (default): one on-chain payment per escalation.
+    // 1) request a quote (the seller mints a single-use nonce)
+    send(conn, { type: 'quoteReq', buyerConsumerPub: deps.consumerPub, buyerWallet: deps.buyer.address });
+    const quote = await waitFor(rec, 'quote', 20_000);
+
+    // 2) sign the identity bind + pay USD₮ to the seller's advertised wallet
+    const signature = await signer.signMessage(bindMessage(quote.nonce, deps.consumerPub, deps.buyer.address));
+    const qprice = BigInt(quote.price);
+    log(`[storefront] paying ${quote.price} to ${String(quote.sellerWallet).slice(0, 10)}…`);
+    const tx = await deps.buyer.transferToken(quote.token, quote.sellerWallet, qprice);
+    send(conn, {
+      type: 'receipt',
+      nonce: quote.nonce,
+      txHash: tx?.hash ?? '',
+      buyerConsumerPub: deps.consumerPub,
+      buyerWallet: deps.buyer.address,
+      signature,
+    });
+
+    // 3) the seller confirms the payment on-chain (~10–15s) then grants the gated provider pubkey
+    const grant = await waitFor(rec, 'grant', 120_000);
+
+    // 4) delegate the seller's model over E2E
+    const out = await delegateAndRun(grant.providerPub, seller.model, prompt, opts?.predict);
+    return { ...out, cost: qprice, txHash: tx?.hash, via: 'per-inference', model: seller.model, sellerWallet: quote.sellerWallet };
+  }
+
   return {
     list() {
       return offers().sort(byPriceThenSpeed);
@@ -246,50 +321,18 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       }));
     },
     async purchase(seller, prompt, opts) {
-      const rec = conns.get(seller.id);
-      if (!rec || !rec.offer?.online) throw new Error('seller offline');
-      const conn = rec.conn;
-      const price = seller.priceBaseUnits;
-
-      // ── ESCROW CHANNEL PATH ── (when both sides support it): open once, then instant vouchers.
-      if (esc && escrowWallet && seller.escrow) {
-        const sess = await ensureSession(rec, seller);
-        if (sess.cumulative + price > sess.deposit) {
-          throw new Error('channel deposit exhausted — top up to continue'); // caller falls back to local
-        }
-        sess.cumulative += price; // running total owed
-        const sig = await esc.signVoucher(escrowWallet, seller.sellerWallet, sess.epoch, sess.cumulative);
-        send(conn, { type: 'draw', buyerWallet: escrowWallet.address, cumulative: sess.cumulative.toString(), signature: sig });
-        await waitFor(rec, 'drawAck', 20_000); // seller verified + recorded the voucher (instant)
-        const out = await delegateAndRun(sess.providerPub, seller.model, prompt, opts?.predict);
-        return { ...out, cost: price, via: 'channel', model: seller.model, sellerWallet: seller.sellerWallet };
+      // Record the outcome against the seller's reputation (served on success, failed on any error)
+      // and refresh the offer's displayed counts so the marketplace updates live.
+      try {
+        const res = await runPurchase(seller, prompt, opts);
+        deps.reputation?.recordServed(seller.sellerWallet, res.stats?.tps ?? null);
+        refreshOfferRep(seller.sellerWallet);
+        return res;
+      } catch (e) {
+        deps.reputation?.recordFailed(seller.sellerWallet);
+        refreshOfferRep(seller.sellerWallet);
+        throw e;
       }
-
-      // ── PER-INFERENCE PATH ── (default): one on-chain payment per escalation.
-      // 1) request a quote (the seller mints a single-use nonce)
-      send(conn, { type: 'quoteReq', buyerConsumerPub: deps.consumerPub, buyerWallet: deps.buyer.address });
-      const quote = await waitFor(rec, 'quote', 20_000);
-
-      // 2) sign the identity bind + pay USD₮ to the seller's advertised wallet
-      const signature = await signer.signMessage(bindMessage(quote.nonce, deps.consumerPub, deps.buyer.address));
-      const qprice = BigInt(quote.price);
-      log(`[storefront] paying ${quote.price} to ${String(quote.sellerWallet).slice(0, 10)}…`);
-      const tx = await deps.buyer.transferToken(quote.token, quote.sellerWallet, qprice);
-      send(conn, {
-        type: 'receipt',
-        nonce: quote.nonce,
-        txHash: tx?.hash ?? '',
-        buyerConsumerPub: deps.consumerPub,
-        buyerWallet: deps.buyer.address,
-        signature,
-      });
-
-      // 3) the seller confirms the payment on-chain (~10–15s) then grants the gated provider pubkey
-      const grant = await waitFor(rec, 'grant', 120_000);
-
-      // 4) delegate the seller's model over E2E
-      const out = await delegateAndRun(grant.providerPub, seller.model, prompt, opts?.predict);
-      return { ...out, cost: qprice, txHash: tx?.hash, via: 'per-inference', model: seller.model, sellerWallet: quote.sellerWallet };
     },
     async close() {
       try { swarm.destroy(); } catch {}

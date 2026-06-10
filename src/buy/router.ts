@@ -12,6 +12,7 @@ export interface RouteResult {
   samples: string[];
   draft: string; // the local answer we'd return if not escalating
   thinking?: string;
+  reason?: 'consistency' | 'empty' | 'verifier'; // why we escalated (when decision === 'escalate')
 }
 
 export interface ModelLoadProgress {
@@ -25,6 +26,7 @@ export interface RouterOptions {
   k?: number; // samples per prompt
   threshold?: number; // escalate if consistency < threshold
   maxOutputChars?: number; // cap text before embedding
+  verify?: boolean; // run a self-critique pass on confident local answers (catches some confident-wrong)
   log?: (m: string) => void;
   onProgress?: (p: ModelLoadProgress) => void; // first-run model download progress (for the UI)
 }
@@ -60,11 +62,37 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
   const k = opts.k ?? 3;
   const threshold = opts.threshold ?? 0.86;
   const cap = opts.maxOutputChars ?? 1500;
+  const verifyOn = opts.verify ?? false;
   const log = opts.log ?? (() => {});
 
   const onProg = (model: string) => (p: any) => opts.onProgress?.({ model, percentage: Number(p?.percentage ?? 0) });
   const llmId = await sdk.loadModel({ modelSrc: sdk[localModel], modelType: 'llm', modelConfig: { ctx_size: 8192 }, onProgress: onProg(localModel) });
   const embId = await sdk.loadModel({ modelSrc: sdk[embedModel], onProgress: onProg(embedModel) });
+
+  // Self-critique verifier — a SECOND, independent pass that asks the model to fact-check its own
+  // draft (with reasoning ON, so a thinking model can reason about correctness rather than just
+  // re-assert it). Returns true if the draft looks SHAKY → escalate. Best-effort: a small model that
+  // is confidently wrong may also be confident in critique, so this catches SOME — not all — cases.
+  // It costs one extra generation, so it's opt-in (RouterOptions.verify) and only runs on local picks.
+  async function looksShaky(prompt: string, draft: string): Promise<boolean> {
+    const critique = `You are a strict fact-checker. A small model answered a question. Find any factual errors.\n\nQuestion: ${prompt}\n\nAnswer: ${draft}\n\nIs the answer factually correct and on-topic? Reply with exactly one line: "VERDICT: SOLID" or "VERDICT: SHAKY".`;
+    try {
+      const run = sdk.completion({
+        modelId: llmId,
+        history: [{ role: 'user', content: critique }],
+        stream: true,
+        captureThinking: true,
+        kvCache: false,
+        generationParams: { predict: 256, reasoning_budget: -1 }, // let it think when fact-checking
+      });
+      let out = '';
+      for await (const ev of run.events) { if (ev.type === 'contentDelta') out += ev.text; }
+      await run.final.catch(() => null);
+      return /shaky/i.test(out) && !/solid/i.test(out.split(/verdict/i).pop() ?? out);
+    } catch {
+      return false; // verifier failure must never block a normal answer
+    }
+  }
 
   async function sampleOnce(prompt: string): Promise<{ content: string; thinking: string }> {
     const run = sdk.completion({
@@ -104,7 +132,7 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
       const nonEmpty = samples.filter((s) => s.trim().length > 0);
       const draft = nonEmpty[0] ?? '';
       if (nonEmpty.length < Math.max(2, Math.ceil(k / 2))) {
-        return { decision: 'escalate', consistency: 0, samples, draft, thinking: firstThinking || undefined };
+        return { decision: 'escalate', consistency: 0, samples, draft, thinking: firstThinking || undefined, reason: 'empty' };
       }
 
       const vecs: number[][] = [];
@@ -113,13 +141,18 @@ export async function createRouter(opts: RouterOptions = {}): Promise<Router> {
         vecs.push(r.embedding as number[]);
       }
       const consistency = meanPairwiseCosine(vecs);
-      return {
-        decision: consistency < threshold ? 'escalate' : 'local',
-        consistency,
-        samples,
-        draft,
-        thinking: firstThinking || undefined,
-      };
+      if (consistency < threshold) {
+        return { decision: 'escalate', consistency, samples, draft, thinking: firstThinking || undefined, reason: 'consistency' };
+      }
+
+      // Confident by self-consistency — but a small model can be *confidently wrong*. If the verifier
+      // is enabled, give the draft a self-critique pass; a SHAKY verdict overrides to escalate.
+      if (verifyOn && (await looksShaky(prompt, draft))) {
+        log('    verifier: SHAKY → escalate (consistent but failed self-critique)');
+        return { decision: 'escalate', consistency, samples, draft, thinking: firstThinking || undefined, reason: 'verifier' };
+      }
+
+      return { decision: 'local', consistency, samples, draft, thinking: firstThinking || undefined };
     },
     async close() {
       try { await sdk.unloadModel({ modelId: llmId }); } catch {}

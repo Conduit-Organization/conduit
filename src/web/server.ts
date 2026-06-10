@@ -24,6 +24,7 @@ const { createRouter } = await import('../buy/router');
 const { createStorefront } = await import('../buy/storefront');
 const { createMarketAgent } = await import('../buy/market-agent');
 const { loadEscrowDeployment } = await import('../core/escrow');
+const { createReputation } = await import('../core/reputation');
 const { createSellerManager } = await import('./seller');
 const { offerFromProfile } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
@@ -69,6 +70,7 @@ const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
 // Escrow (payment-channel) mode is opt-in: CONDUIT_ESCROW=1 + a deployed contract. The seller child
 // inherits CONDUIT_ESCROW via the spawned env, so enabling it here turns it on for both roles.
 const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : null;
+const reputation = createReputation(); // first-party seller reputation (persists to ~/.conduit/reputation.json)
 
 // Seller mode: the engine manages the proven sell.ts as a child (spawn/kill/inspect). It earns into
 // account index 1 of the unlocked wallet (distinct from the buyer's index 0). See src/web/seller.ts.
@@ -125,7 +127,7 @@ let router: any = null;
 let routerReady = false;
 const routerPromise = (async () => {
   try {
-    router = await createRouter({ k: 5, onProgress: (pr) => setProgress({ phase: 'downloading', model: pr.model, percentage: pr.percentage }) });
+    router = await createRouter({ k: 5, verify: process.env.CONDUIT_VERIFY === '1', onProgress: (pr) => setProgress({ phase: 'downloading', model: pr.model, percentage: pr.percentage }) });
     routerReady = true;
     setProgress({ phase: 'ready' });
   } catch (e: any) {
@@ -136,7 +138,7 @@ const routerPromise = (async () => {
 
 async function unlockWith(mnemonic: string): Promise<string> {
   const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
-  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep });
+  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep, reputation });
   buyer = acct;
   storefront = sf;
   agent = null; // (re)created lazily once the router is warm
@@ -171,8 +173,11 @@ function json(res: http.ServerResponse, code: number, obj: unknown) {
   res.end(JSON.stringify(obj));
 }
 
-function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean }) {
-  return { id: o.id, address: o.sellerWallet, model: o.model, price: formatUnits(o.priceBaseUnits, DEC), tps: o.tps, online: o.online };
+function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean; served?: number; failed?: number; successRate?: number }) {
+  return {
+    id: o.id, address: o.sellerWallet, model: o.model, price: formatUnits(o.priceBaseUnits, DEC), tps: o.tps, online: o.online,
+    served: o.served ?? 0, failed: o.failed ?? 0, successRate: o.successRate ?? 0.5,
+  };
 }
 
 function readBody(req: http.IncomingMessage): Promise<any> {

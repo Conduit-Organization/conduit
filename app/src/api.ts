@@ -8,6 +8,9 @@ export interface Peer {
   price: string;
   tps: number;
   online: boolean;
+  served: number; // paid answers this seller has delivered to you
+  failed: number; // failed attempts
+  successRate: number; // [0,1], neutral 0.5 until there's history
 }
 
 export interface WalletStatus {
