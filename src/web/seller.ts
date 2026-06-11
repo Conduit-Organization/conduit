@@ -32,7 +32,7 @@ export interface SellerManagerDeps {
 }
 
 export interface SellerManager {
-  start(mnemonic: string): Promise<SellerStatus>;
+  start(mnemonic: string, model?: string): Promise<SellerStatus>;
   stop(): Promise<void>;
   status(): SellerStatus;
 }
@@ -100,12 +100,12 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
     }
   }
 
-  async function start(mnemonic: string): Promise<SellerStatus> {
+  async function start(mnemonic: string, model?: string): Promise<SellerStatus> {
     if (child) return st; // already running
     reset();
     st.error = null;
     const spec = sellerSpawnSpec(deps.repoRoot);
-    log(`[seller-mgr] starting: ${spec.command} ${spec.args.join(' ')}`);
+    log(`[seller-mgr] starting: ${spec.command} ${spec.args.join(' ')}${model ? ` (model ${model})` : ''}`);
 
     // Build the earnings account (index 1) and snapshot the starting balance for the delta.
     try {
@@ -123,6 +123,7 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
       env: {
         ...process.env,
         CONDUIT_SELLER_MNEMONIC: mnemonic,
+        ...(model ? { CONDUIT_SELLER_MODEL: model } : {}), // seller's chosen model (else sell.ts uses topSellable)
         ...(process.env.CONDUIT_SELLER_ENTRY ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
         QVAC_HYPERSWARM_SEED: '', // let sell.ts pick its own provider identity (don't inherit the buyer's)
       },

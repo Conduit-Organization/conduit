@@ -37,10 +37,19 @@ if (!sellerMnemonic) {
 const seller = await getAccount(sellerMnemonic, cfg.rpcUrl, 1); // seller earnings = account 1 of the wallet
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const RESOURCES = process.env.CONDUIT_RESOURCES || path.join(here, '../..');
 let offer = { model: 'QWEN3_4B_INST_Q4_K_M', priceBaseUnits: priceFor('QWEN3_4B_INST_Q4_K_M'), tps: 0 };
 try {
-  const profile = JSON.parse(readFileSync(path.join(here, '../../bench-profile.json'), 'utf8'));
+  const profile = JSON.parse(readFileSync(path.join(RESOURCES, 'bench-profile.json'), 'utf8'));
   offer = offerFromProfile(profile) ?? offer;
+  // The seller may override the prober's pick (CONDUIT_SELLER_MODEL) — but ONLY to a model this
+  // machine actually benchmarked as runnable (no "might crash" choices). Price follows the model.
+  const chosen = process.env.CONDUIT_SELLER_MODEL;
+  if (chosen) {
+    const m = profile.models?.find((x: any) => x.id === chosen && x.loaded);
+    if (m) offer = { model: chosen, priceBaseUnits: priceFor(chosen), tps: m.tps ?? 0 };
+    else console.log(`[seller] requested model ${chosen} not in this machine's runnable set — keeping ${offer.model}`);
+  }
 } catch { /* default */ }
 
 // nonce → seller USD₮ balance at quote time (for confirm-by-delta); used nonces can't be replayed.

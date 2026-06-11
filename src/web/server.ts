@@ -26,7 +26,7 @@ const { createMarketAgent } = await import('../buy/market-agent');
 const { loadEscrowDeployment } = await import('../core/escrow');
 const { createReputation } = await import('../core/reputation');
 const { createSellerManager } = await import('./seller');
-const { offerFromProfile } = await import('../core/pricing');
+const { offerFromProfile, priceFor } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
 const sdk: any = await import('@qvac/sdk');
 
@@ -94,13 +94,18 @@ function sellerProfile() {
       topSellable: profile.topSellable ?? null,
       localDraft: profile.localDraft ?? null,
       ts: profile.ts ?? null,
+      recommended: profile.topSellable ?? null, // the prober's optimal pick — highlighted in the UI
       offer: o
         ? { model: o.model, price: formatUnits(o.priceBaseUnits, DEC), priceBaseUnits: o.priceBaseUnits.toString(), tps: o.tps }
         : null,
-      models: (profile.models ?? []).map((m: any) => ({ id: m.id, loaded: !!m.loaded, tps: m.tps ?? null, backend: m.backend ?? null })),
+      // Sellable models = those this machine actually benchmarked as runnable, with their tiered price.
+      // The seller may pick any of these; the prober's `recommended` is pre-selected in the UI.
+      models: (profile.models ?? [])
+        .filter((m: any) => m.loaded)
+        .map((m: any) => ({ id: m.id, loaded: true, tps: m.tps ?? null, backend: m.backend ?? null, price: formatUnits(priceFor(m.id), DEC) })),
     };
   } catch {
-    return { backend: null, platform: null, topSellable: null, localDraft: null, ts: null, offer: null, models: [] };
+    return { backend: null, platform: null, topSellable: null, recommended: null, localDraft: null, ts: null, offer: null, models: [] };
   }
 }
 
@@ -332,7 +337,8 @@ const server = http.createServer((req, res) => {
     }
     if (req.method === 'POST' && p === '/api/seller/start') {
       if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
-      try { json(res, 200, await seller.start(wallet.mnemonic)); }
+      const { model } = await readBody(req); // optional: the seller's chosen model (else the prober's pick)
+      try { json(res, 200, await seller.start(wallet.mnemonic, typeof model === 'string' ? model : undefined)); }
       catch (e: any) { json(res, 500, { error: String(e?.message ?? e) }); }
       return;
     }

@@ -87,14 +87,23 @@ export interface SellerOfferProfile {
   tps: number;
 }
 
+export interface SellableModel {
+  id: string;
+  loaded: boolean;
+  tps: number | null;
+  backend: string | null;
+  price: string; // human USD₮ for this model tier
+}
+
 export interface SellerProfile {
   backend: string | null;
   platform: string | null;
   topSellable: string | null;
+  recommended: string | null; // the prober's optimal pick — highlight + pre-select this
   localDraft: string | null;
   ts: string | null;
   offer: SellerOfferProfile | null;
-  models: { id: string; loaded: boolean; tps: number | null; backend: string | null }[];
+  models: SellableModel[]; // runnable models this machine benchmarked (each with its tiered price)
 }
 
 async function postJson(url: string, body: unknown): Promise<any> {
@@ -144,8 +153,8 @@ export async function getSellerProfile(): Promise<SellerProfile> {
   if (!r.ok) throw new Error(`seller profile ${r.status}`);
   return r.json();
 }
-export async function startSeller(): Promise<SellerStatus> {
-  return postJson('/api/seller/start', {});
+export async function startSeller(model?: string): Promise<SellerStatus> {
+  return postJson('/api/seller/start', model ? { model } : {});
 }
 export async function stopSeller(): Promise<void> {
   await postJson('/api/seller/stop', {});

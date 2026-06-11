@@ -85,9 +85,9 @@ export default function App() {
     [onSelect],
   );
 
-  const onSellerStart = useCallback(async () => {
+  const onSellerStart = useCallback(async (model?: string) => {
     setSellerBusy(true);
-    try { setSellerStatus(await startSeller()); } catch { /* surfaced via status */ }
+    try { setSellerStatus(await startSeller(model)); } catch { /* surfaced via status */ }
     finally { setSellerBusy(false); void refresh(); }
   }, [refresh]);
 

@@ -9,8 +9,9 @@ function usdtFromBaseUnits(v: string | null): string {
   return Number.isFinite(n) ? (n / 1e6).toFixed(2) : '—';
 }
 
-// Seller mode: show what this machine can offer (from the capability profile), let the user go
-// online (spawns the proven sell.ts child via the engine), and show live status + earnings.
+// Seller mode: the prober (bench-profile.json) decides the OPTIMAL model for this machine; we
+// highlight it as "Recommended" and pre-select it, but let the seller pick any model their GPU can
+// actually run (price follows the model). Going online spawns the proven sell.ts child via the engine.
 export default function SellerScreen({
   status,
   busy,
@@ -19,23 +20,29 @@ export default function SellerScreen({
 }: {
   status: SellerStatus | null;
   busy: boolean;
-  onStart: () => void;
+  onStart: (model?: string) => void;
   onStop: () => void;
 }) {
   const [profile, setProfile] = useState<SellerProfile | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    void getSellerProfile().then((p) => { if (live) setProfile(p); }).catch(() => {});
+    void getSellerProfile().then((p) => {
+      if (!live) return;
+      setProfile(p);
+      setChosen((c) => c ?? p.recommended ?? p.topSellable ?? p.models[0]?.id ?? null); // default to the prober's pick
+    }).catch(() => {});
     return () => { live = false; };
   }, []);
 
   const running = !!status?.running;
   const online = !!status?.online;
 
-  // Prefer the live offer from the running seller; fall back to the bench profile's offer.
-  const model = status?.model ?? profile?.offer?.model ?? profile?.topSellable ?? null;
-  const price = online ? usdtFromBaseUnits(status?.price ?? null) : profile?.offer?.price ?? '—';
-  const tps = online ? status?.tps ?? null : profile?.offer?.tps ?? null;
+  // When running, reflect the live offer; otherwise reflect the seller's current selection.
+  const sel = profile?.models.find((m) => m.id === chosen) ?? null;
+  const model = online ? status?.model ?? null : chosen;
+  const price = online ? usdtFromBaseUnits(status?.price ?? null) : sel?.price ?? profile?.offer?.price ?? '—';
+  const tps = online ? status?.tps ?? null : sel?.tps ?? profile?.offer?.tps ?? null;
 
   const dotClass = status?.error ? 'err' : online ? 'on' : running ? 'warm' : '';
   const stateText = status?.error
@@ -85,6 +92,32 @@ export default function SellerScreen({
           </p>
         )}
 
+        {/* Model picker — runnable models for this GPU; the prober's pick is badged + pre-selected.
+            Locked while online (change requires going offline first). */}
+        {profile && profile.models.length > 0 && (
+          <div className="model-picker">
+            <div className="mp-label">Choose what to sell {online && <span className="mp-locked">· locked while online</span>}</div>
+            {profile.models.map((m) => {
+              const isRec = m.id === profile.recommended;
+              const isSel = online ? m.id === status?.model : m.id === chosen;
+              return (
+                <button
+                  key={m.id}
+                  className={`mp-row${isSel ? ' sel' : ''}`}
+                  onClick={() => !online && !running && setChosen(m.id)}
+                  disabled={online || running}
+                >
+                  <span className="mp-top">
+                    <span className="mp-name"><Gpu /> {modelName(m.id)}{isRec && <span className="mp-rec">★ recommended</span>}</span>
+                    <span className="mp-check">{isSel ? '✓' : ''}</span>
+                  </span>
+                  <span className="mp-sub">{m.price} USD₮ / answer · {m.tps != null ? `~${Math.round(m.tps)} tps` : '—'}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="seller-go">
           <div className="sg-state">
             <i className={`dot ${dotClass}`} />
@@ -95,8 +128,8 @@ export default function SellerScreen({
               {busy ? 'Stopping…' : 'Go offline'}
             </button>
           ) : (
-            <button className="gate-btn primary" onClick={onStart} disabled={busy || !model}>
-              {busy ? 'Starting…' : 'Go online'}
+            <button className="gate-btn primary" onClick={() => onStart(chosen ?? undefined)} disabled={busy || !chosen}>
+              {busy ? 'Starting…' : `Go online${sel ? ` with ${modelName(sel.id)}` : ''}`}
             </button>
           )}
         </div>
