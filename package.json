@@ -1,6 +1,6 @@
 {
   "name": "conduit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Conduit — a serverless P2P inference market where a settled USD₮ payment is the access handshake.",
@@ -27,8 +27,9 @@
     "app:build": "npm --prefix app run build",
     "start": "npm run app:build && npm run web",
     "engine:build": "node scripts/build-engine.mjs",
-    "electron:build": "tsc -p electron && node scripts/electron-pkg.mjs",
+    "electron:build": "tsc -p electron && node scripts/electron-pkg.mjs && npm run icon:build",
     "electron:dev": "npm run app:build && npm run electron:build && electron electron/dist/main.js",
+    "icon:build": "node scripts/make-icon.mjs",
     "dist": "npm run app:build && npm run engine:build && npm run electron:build && electron-builder",
     "dist:dir": "npm run app:build && npm run engine:build && npm run electron:build && electron-builder --dir",
     "spike:firewall": "tsx src/spikes/01-firewall/run.ts",
@@ -53,11 +54,17 @@
     "mac": {
       "target": ["dmg"],
       "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
       "identity": null
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.png"
     },
     "linux": {
       "target": ["AppImage", "deb"],
-      "category": "Development"
+      "category": "Development",
+      "icon": "build/icon.png"
     }
   },
   "dependencies": {

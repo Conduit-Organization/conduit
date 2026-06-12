@@ -9,7 +9,7 @@ release/
 contracts/artifacts/
 contracts/cache/
 contracts/typechain-types/
-
+docs/LAUNCH-TWEETS-30DAY.md
 # secrets — never commit
 .env
 .env.local

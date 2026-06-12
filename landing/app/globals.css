@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Conduit — landing system
+   ink base · single mint accent · amber reserved for money · grain + glow
+   Type: Instrument Serif (display) / Hanken Grotesk (UI) / JetBrains Mono (data)
+   ========================================================================== */
+
+:root {
+  --ink-0: #0a0e13;
+  --ink-1: #0e1217;
+  --ink-2: #121922;
+  --ink-3: #16202b;
+  --line: #1e2a35;
+  --line-2: #2a3b48;
+  --mint: #2be3a8;
+  --mint-soft: rgba(43, 227, 168, 0.14);
+  --mint-line: rgba(43, 227, 168, 0.34);
+  --amber: #ffc44d;
+  --amber-soft: rgba(255, 196, 77, 0.12);
+  --red: #ff6b6b;
+  --text: #e7f0ef;
+  --muted: #8a9aa6;
+  --muted-2: #5c6b76;
+
+  --wrap: 1140px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+  line-height: 1.55;
+  background:
+    radial-gradient(1100px 560px at 78% -12%, rgba(43, 227, 168, 0.07), transparent 60%),
+    radial-gradient(900px 700px at -10% 110%, rgba(43, 227, 168, 0.045), transparent 55%),
+    var(--ink-1);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* fine grain overlay for depth — fixed, cheap, non-interactive */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+}
+
+::selection {
+  background: var(--mint-soft);
+  color: var(--text);
+}
+
+/* keyboard focus only — never on mouse */
+:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #38505f;
+  background-clip: padding-box;
+}
+
+/* ----------------------------------------------------------------- layout */
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  /* horizontal only — do not set vertical padding here, or it overrides the
+     vertical padding utilities on .wrap elements (nav and sections). */
+  padding-inline: 24px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--mint);
+}
+
+.display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.04;
+}
+.display em {
+  font-style: italic;
+  color: var(--mint);
+}
+
+.mono {
+  font-family: var(--font-mono), monospace;
+}
+
+/* hairline divider with a mint hot-spot in the middle */
+.seam {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, var(--line) 18%, var(--line) 82%, transparent);
+  position: relative;
+}
+.seam::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--mint-line) 42%, var(--mint-line) 58%, transparent);
+  opacity: 0.6;
+}
+
+/* glassy panel used across feature/bento cards */
+.panel {
+  background: linear-gradient(180deg, var(--ink-2), var(--ink-1));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+/* gentle card hover lift (transform/opacity only — GPU friendly) */
+.lift {
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.28s, box-shadow 0.28s;
+  will-change: transform;
+}
+.lift:hover {
+  transform: translateY(-4px);
+  border-color: var(--mint-line);
+  box-shadow: 0 24px 60px -32px rgba(43, 227, 168, 0.5);
+}
+
+/* ----------------------------------------------------------- reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -19,6 +19,16 @@ const PORT_PREF = Number(process.env.PORT) || 8788;
 const READY_TIMEOUT_MS = 90_000; // engine boot can include first model warm-up; be patient
 const SHUTDOWN_GRACE_MS = 8_000; // give the engine time to stop the Bare worker before we SIGKILL
 
+// Escrow (instant payment-channel) is ON by default in the shipped app — paid answers settle off-chain
+// in ~2s instead of waiting ~15s on-chain each time. The contract is deployed on Sepolia; the address
+// is public (not a secret). Passed via env so it works in both packaged and dev electron runs without
+// bundling deployed.sepolia.json. (Keep in sync with contracts/deployed.sepolia.json if redeployed.)
+const ESCROW_ENV: NodeJS.ProcessEnv = {
+  CONDUIT_ESCROW: '1',
+  CONDUIT_ESCROW_ADDRESS: '0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7',
+  CONDUIT_CHAIN_ID: '11155111',
+};
+
 let engine: ChildProcess | null = null;
 let win: BrowserWindow | null = null;
 let quitting = false;
@@ -66,6 +76,7 @@ function engineSpawnSpec(): { command: string; args: string[]; cwd: string; env:
         ELECTRON_RUN_AS_NODE: '1',
         CONDUIT_RESOURCES: resourcesApp,
         CONDUIT_SELLER_ENTRY: path.join(resourcesApp, 'dist-engine', 'sell.mjs'),
+        ...ESCROW_ENV,
       },
     };
   }
@@ -74,7 +85,7 @@ function engineSpawnSpec(): { command: string; args: string[]; cwd: string; env:
     command: process.platform === 'win32' ? 'node.exe' : 'node',
     args: ['--import', 'tsx', 'src/web/server.ts'],
     cwd: REPO_ROOT,
-    env: {},
+    env: { ...ESCROW_ENV },
   };
 }
 
@@ -160,6 +171,7 @@ function createWindow(url: string): void {
     minHeight: 600,
     backgroundColor: '#0E1217', // matches the app's ink background — no white flash on load
     title: 'Conduit',
+    icon: path.join(__dirname, 'icon.png'), // taskbar / window icon (Linux & Windows; macOS uses the .icns)
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
