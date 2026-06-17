@@ -57,8 +57,11 @@ export interface SellersResp {
   selected: string;
 }
 
+export type DeclineReason = 'no-seller' | 'budget' | 'error';
+
 export interface AskResult {
   source: Source;
+  reason: DeclineReason | null; // why it fell back to local, when source === 'declined'
   answer: string;
   note: string | null;
   consistency: number;

@@ -20,6 +20,7 @@
     "buy": "tsx src/node/buy.ts",
     "market": "tsx src/scripts/market-demo.ts",
     "demo": "tsx src/scripts/demo.ts",
+    "audit": "tsx src/scripts/audit-demo.ts",
     "escrow-demo": "tsx src/scripts/escrow-demo.ts",
     "web": "tsx src/web/server.ts",
     "app:install": "npm --prefix app install",

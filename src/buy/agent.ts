@@ -24,6 +24,10 @@ export interface AgentDeps {
 
 export interface AgentResult {
   source: 'local' | 'paid' | 'declined';
+  // When source === 'declined', WHY we fell back to the local draft instead of paying a peer.
+  // 'no-seller' = no remote GPU online to escalate to; 'budget' = spend policy refused;
+  // 'error' = a seller was chosen but the pay/delegate round-trip failed.
+  reason?: 'no-seller' | 'budget' | 'error';
   answer: string;
   consistency: number;
   cost: bigint;

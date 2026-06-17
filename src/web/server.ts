@@ -359,7 +359,8 @@ const server = http.createServer((req, res) => {
       try {
         const r = await a.ask(String(prompt));
         json(res, 200, {
-          source: r.source, answer: r.answer, note: r.note ?? null,
+
+          source: r.source, reason: r.reason ?? null, answer: r.answer, note: r.note ?? null,
           consistency: Number(r.consistency.toFixed(3)), cost: formatUnits(r.cost, DEC),
           stats: { ttftMs: r.stats?.ttftMs ?? null, tps: r.stats?.tps ?? null },
         });

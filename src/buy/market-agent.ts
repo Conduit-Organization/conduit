@@ -30,11 +30,11 @@ export function createMarketAgent(deps: MarketAgentDeps): MarketAgent {
       // Router wants to escalate — but only if there's a seller AND the spend policy authorises it.
       const seller = deps.storefront.getActive();
       if (!seller) {
-        return { source: 'declined', answer: r.draft, consistency: r.consistency, cost: 0n, note: 'no sellers online — answered locally' };
+        return { source: 'declined', reason: 'no-seller', answer: r.draft, consistency: r.consistency, cost: 0n, note: 'no peer online to escalate to — answered locally' };
       }
       const verdict = deps.policy.check(seller.priceBaseUnits);
       if (!verdict.ok) {
-        return { source: 'declined', answer: r.draft, consistency: r.consistency, cost: 0n, note: `${verdict.reason} — answered locally` };
+        return { source: 'declined', reason: 'budget', answer: r.draft, consistency: r.consistency, cost: 0n, note: `${verdict.reason} — answered locally` };
       }
 
       try {
@@ -44,7 +44,7 @@ export function createMarketAgent(deps: MarketAgentDeps): MarketAgent {
         return { source: 'paid', answer: res.answer, consistency: r.consistency, cost: res.cost, tx: res.txHash, stats: res.stats };
       } catch (e: any) {
         // pay/grant/delegate failed (timeout, disconnect, unconfirmed) — fall back to the local draft
-        return { source: 'declined', answer: r.draft, consistency: r.consistency, cost: 0n, note: `escalation failed (${String(e?.message ?? e)}) — answered locally` };
+        return { source: 'declined', reason: 'error', answer: r.draft, consistency: r.consistency, cost: 0n, note: `escalation failed (${String(e?.message ?? e)}) — answered locally` };
       }
     },
   };

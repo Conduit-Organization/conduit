@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" fill="none" role="img" aria-label="Conduit">
+  <defs>
+    <radialGradient id="glow" cx="22%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#2be3a8" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#2be3a8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#121922"/>
+      <stop offset="100%" stop-color="#0a0e13"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="638" height="158" rx="22" fill="url(#bg)" stroke="#1e2a35" stroke-width="1.5"/>
+  <rect x="1" y="1" width="638" height="158" rx="22" fill="url(#glow)"/>
+
+  <!-- Conduit mark: mint arc + node (1000-space scaled to ~92px) -->
+  <g transform="translate(48,34) scale(0.092)">
+    <path d="M736.4,315.3 A300,300 0 1 0 736.4,684.7" stroke="#2be3a8" stroke-width="86" stroke-linecap="round"/>
+    <circle cx="800" cy="500" r="44" fill="#2be3a8"/>
+  </g>
+
+  <text x="172" y="78" font-family="Georgia, 'Times New Roman', serif" font-size="52" fill="#e7f0ef">Conduit</text>
+  <text x="174" y="108" font-family="ui-monospace, 'SF Mono', monospace" font-size="15" letter-spacing="1.5" fill="#8a9aa6">serverless P2P inference market</text>
+  <text x="174" y="130" font-family="ui-monospace, 'SF Mono', monospace" font-size="13" letter-spacing="0.5" fill="#2be3a8">a settled USD₮ payment is the access handshake</text>
+</svg>

@@ -1,0 +1,6 @@
+{"ts":"2026-06-02T16:15:33.000Z","event":"p2p","sub":"gate_opened","provider":"a68c3f5b26cd264b355694c0253ba49b305eab961c92b84fe430b12ff80607da","allowed_buyer":"e02b8b1de4183c78ec83fd4738fcf9365d0dc62611ff96fc0cdf0104b266bc95"}
+{"ts":"2026-06-02T16:15:42.630Z","event":"inference","model":"QWEN3_600M_INST_Q4","role":"local","decision":"local","cost_usdt":"0","cloud_bytes":0}
+{"ts":"2026-06-02T16:16:14.722Z","event":"settlement","network":"sepolia","amount_usdt":"0.01","to":"0x73A5021c0935b79D46C2D650821b212dC5b3b9Eb","tx":"0x7e1f9b81a43dfca818e5820e018c3ffadeb46af5dd7b97f99457fe5995dea4cf","status":"confirmed"}
+{"ts":"2026-06-02T16:16:14.722Z","event":"p2p","sub":"handshake_granted","peer":"e02b8b1de4183c78ec83fd4738fcf9365d0dc62611ff96fc0cdf0104b266bc95","cloud_bytes":0}
+{"ts":"2026-06-02T16:16:14.722Z","event":"inference","model":"QWEN3_4B_INST_Q4_K_M","role":"delegated","ttft_ms":44.724000000000004,"tps":64.69184599821415,"prompt_tokens":25,"cost_usdt":"0.01","cloud_bytes":0}
+{"ts":"2026-06-02T16:16:27.586Z","event":"p2p","sub":"handshake_rejected","peer":"1cf9a320f94b216dc68401d5432821ebb129a228061e47bb8449b9a8b5e04107","reason":"not_allow_listed","bytes_served":0}
