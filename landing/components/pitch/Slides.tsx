@@ -291,14 +291,14 @@ function Status() {
   const shipped = [
     "Public testnet, live on Sepolia",
     "Instant escrow payment channels",
-    "Desktop app — Linux build out now",
+    "Desktop app — Linux, macOS & Windows",
     "First-party seller reputation",
   ];
   const next = [
-    "macOS & Windows builds",
     "Mainnet USD₮ settlement",
     "Model auctions & richer routing",
     "A standing market of seed sellers",
+    "Mobile & browser clients",
   ];
   return (
     <Stage>

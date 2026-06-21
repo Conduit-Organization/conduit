@@ -12,7 +12,12 @@ export const VERSION = "v0.1.0";
 export const DOWNLOADS = {
   linuxAppImage: `${REPO}/releases/download/v0.1.0/Conduit-0.1.0.AppImage`,
   linuxDeb: `${REPO}/releases/download/v0.1.0/conduit_0.1.0_amd64.deb`,
+  winExe: `${REPO}/releases/download/v0.1.0/Conduit-0.1.0-Setup.exe`,
+  // macOS .dmg is built but not yet uploaded — flip MAC_AVAILABLE to true once the asset is on the release.
+  macDmg: `${REPO}/releases/download/v0.1.0/Conduit-0.1.0-arm64.dmg`,
 } as const;
+
+export const MAC_AVAILABLE = false;
 
 export type ModelInfo = {
   family: string;

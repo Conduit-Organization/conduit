@@ -53,7 +53,7 @@ export default function Download() {
             Get Conduit <span className="mono align-middle text-[0.5em] text-mint">v0.1.0</span>
           </>
         }
-        lead="Pick your platform. Linux builds are ready now; macOS and Windows packaged installers are on the way — until then you can run Conduit from source on any of the three."
+        lead="Pick your platform. Linux and Windows builds are ready now; the macOS installer is on the way — until then you can run Conduit from source."
       />
 
       <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -124,22 +124,22 @@ export default function Download() {
             <span className="text-text/90">
               <WinGlyph />
             </span>
-            <h3 className="mt-4 flex items-center gap-2 text-[18px] font-semibold">
-              Windows <SoonBadge />
-            </h3>
+            <h3 className="mt-4 text-[18px] font-semibold">Windows</h3>
             <p className="mono mt-1 text-[12.5px] text-muted-2">x86_64 · .exe installer</p>
-            <p className="mt-5 text-[14px] leading-relaxed text-muted">
-              Packaged build coming shortly (it has to be built on Windows). Until then,{" "}
+            <div className="mt-5 flex flex-col gap-2.5">
               <a
-                href={RUN_FROM_SOURCE}
+                href={DOWNLOADS.winExe}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-mint underline-offset-2 hover:underline"
+                className="group flex items-center justify-between rounded-lg border border-line-2 px-3.5 py-3 text-[14px] font-medium transition-colors hover:border-mint-line hover:bg-mint-soft"
               >
-                run from source
-              </a>{" "}
-              — same product, a few terminal commands.
-            </p>
+                <span className="inline-flex items-center gap-2">
+                  <DownloadIcon size={15} aria-hidden /> Installer
+                  <span className="text-muted-2">· setup</span>
+                </span>
+                <span className="mono text-[12px] text-muted-2 group-hover:text-mint">.exe</span>
+              </a>
+            </div>
           </Card>
         </Reveal>
       </div>

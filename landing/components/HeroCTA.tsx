@@ -2,8 +2,9 @@
 
 import { ArrowRight, Download } from "lucide-react";
 import Magnetic from "./Magnetic";
+import { LinuxGlyph, MacGlyph, WinGlyph } from "./OSGlyphs";
 import { useDetectedOS, type OS } from "@/lib/os";
-import { DOWNLOADS } from "@/lib/site";
+import { DOWNLOADS, MAC_AVAILABLE } from "@/lib/site";
 
 function primary(os: OS): { label: string; href: string; external: boolean; note: React.ReactNode } {
   switch (os) {
@@ -30,19 +31,48 @@ function primary(os: OS): { label: string; href: string; external: boolean; note
       };
     case "win":
       return {
-        label: "Get Conduit for Windows",
-        href: "#download",
-        external: false,
-        note: "Packaged .exe coming soon — run from source today.",
+        label: "Download for Windows",
+        href: DOWNLOADS.winExe,
+        external: true,
+        note: ".exe installer · v0.1.0",
       };
     default:
       return {
         label: "See all downloads",
         href: "#download",
         external: false,
-        note: "Linux ready now · macOS & Windows coming soon.",
+        note: "Linux & Windows ready now · macOS coming soon.",
       };
   }
+}
+
+function Pill({
+  icon,
+  label,
+  href,
+  active,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  href: string;
+  active?: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={[
+        "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-medium transition-colors",
+        active
+          ? "border-mint-line bg-mint-soft text-mint"
+          : "border-line-2 text-muted hover:border-mint-line hover:bg-mint-soft hover:text-text",
+      ].join(" ")}
+    >
+      {icon}
+      {label}
+    </a>
+  );
 }
 
 export default function HeroCTA() {
@@ -75,7 +105,25 @@ export default function HeroCTA() {
           See how it works
         </a>
       </div>
-      <p className="mono mt-4 text-[12.5px] text-muted-2">{p.note}</p>
+
+      {/* every platform, one tap away — the visitor's OS is highlighted */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <span className="mono mr-1 text-[11px] uppercase tracking-[0.16em] text-muted-2">Download</span>
+        <Pill icon={<LinuxGlyph size={16} />} label="Linux" href={DOWNLOADS.linuxAppImage} active={os === "linux"} />
+        <Pill icon={<WinGlyph size={15} />} label="Windows" href={DOWNLOADS.winExe} active={os === "win"} />
+        {MAC_AVAILABLE ? (
+          <Pill icon={<MacGlyph size={15} />} label="macOS" href={DOWNLOADS.macDmg} active={os === "mac"} />
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-line-2/60 px-3 py-1.5 text-[13px] font-medium text-muted-2">
+            <MacGlyph size={15} /> macOS
+            <span className="ml-0.5 rounded bg-amber-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber">
+              soon
+            </span>
+          </span>
+        )}
+      </div>
+
+      <p className="mono mt-3 text-[12.5px] text-muted-2">{p.note}</p>
     </div>
   );
 }
