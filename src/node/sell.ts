@@ -68,6 +68,19 @@ const escrowWallet: BaseWallet | null = esc
 const sessions = new Map<string, { buyerPub: string; epoch: bigint; deposit: bigint; cumulative: bigint; lastSig: string; claimed: bigint; claiming: boolean }>();
 const CLAIM_THRESHOLD = 50_000n; // redeem on-chain once unclaimed earnings reach 0.05 USD₮
 
+// Total earnings signed-for but not yet redeemed on-chain, across all live sessions. Vouchers are
+// settled in batches (CLAIM_THRESHOLD) to save gas, so a freshly-served request earns USD₮ that
+// won't hit the wallet for a while. The engine adds this to the on-chain delta so the seller's live
+// "earned" reflects money actually owed, not just what's been claimed. Emitted on every change.
+function totalPendingBaseUnits(): bigint {
+  let p = 0n;
+  for (const s of sessions.values()) p += s.cumulative - s.claimed;
+  return p;
+}
+function emitPending() {
+  console.log(`[seller] earned-pending ${totalPendingBaseUnits()}`);
+}
+
 // Background redeem — never blocks serving the buyer; fire-and-forget when earnings cross the threshold.
 function maybeClaim(buyerWallet: string) {
   const s = sessions.get(buyerWallet.toLowerCase());
@@ -76,7 +89,7 @@ function maybeClaim(buyerWallet: string) {
   s.claiming = true;
   const target = s.cumulative, sig = s.lastSig;
   esc.claim(escrowWallet, buyerWallet, target, sig)
-    .then((tx) => { s.claimed = target; console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`); })
+    .then((tx) => { s.claimed = target; console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`); emitPending(); })
     .catch((e: any) => console.log('[seller] claim failed (will retry):', e?.message ?? e))
     .finally(() => { s.claiming = false; });
 }
@@ -161,6 +174,7 @@ swarm.on('connection', (conn: any) => {
       s.lastSig = m.signature;
       send(conn, { type: 'drawAck', cumulative: cumulative.toString() });
       console.log(`[seller] draw ${cumulative} verified → GRANTED (served)`);
+      emitPending(); // a voucher just landed — surface the earned delta even before it's claimed
       maybeClaim(m.buyerWallet);
     }
   });

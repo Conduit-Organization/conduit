@@ -60,6 +60,7 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
   let earnings: ConduitAccount | null = null;
   let earnedAtStart: bigint | null = null;
   let earnedNow: bigint | null = null;
+  let pendingBaseUnits = 0n; // unclaimed channel vouchers (earned but not yet redeemed on-chain)
 
   const st: SellerStatus = {
     running: false, online: false, model: null, price: null, tps: null,
@@ -69,7 +70,15 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
   function reset() {
     st.running = false; st.online = false; st.model = null; st.price = null; st.tps = null;
     st.address = null; st.requestsServed = 0; st.earned = null; st.startedAt = null;
-    earnings = null; earnedAtStart = null; earnedNow = null;
+    earnings = null; earnedAtStart = null; earnedNow = null; pendingBaseUnits = 0n;
+  }
+
+  // Live earned = on-chain settled delta (per-inference pays + redeemed channel claims) + unclaimed
+  // channel vouchers. The two stay continuous: when a batch claim settles, pending drops exactly as
+  // the on-chain balance rises, so the total never double-counts or jumps.
+  function recomputeEarned() {
+    const onChainDelta = earnedAtStart !== null ? (earnedNow ?? earnedAtStart) - earnedAtStart : 0n;
+    st.earned = (onChainDelta + pendingBaseUnits).toString();
   }
 
   function ingest(line: string) {
@@ -82,9 +91,17 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
       st.address = m[4] ?? null;
       log(`[seller-mgr] online: ${st.model} @ ${st.price} (~${st.tps} tps) → ${st.address}`);
     }
-    if (/GRANTED/.test(line)) {
+    // Unclaimed-earnings beacon from the seller child (base units) — surfaces money owed before claim.
+    const pe = /earned-pending\s+(\d+)/.exec(line);
+    if (pe) {
+      pendingBaseUnits = BigInt(pe[1]!);
+      recomputeEarned();
+    }
+    // Count only ACTUAL served inferences: a channel draw ("(served)") or a per-inference payment
+    // grant — NOT the one-time channel session-open, which also logs GRANTED but serves nothing yet.
+    if (/GRANTED \(served\)/.test(line) || /payment verified.*GRANTED/.test(line)) {
       st.requestsServed += 1;
-      void refreshEarnings(); // a sale just settled — refresh the on-chain delta
+      void refreshEarnings(); // refresh the on-chain delta too (per-inference pays land in the wallet)
     }
   }
 
@@ -94,7 +111,7 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
       const bal = await earnings.tokenBalance(deps.usdtAddress);
       earnedNow = bal;
       if (earnedAtStart === null) earnedAtStart = bal;
-      st.earned = (bal - earnedAtStart).toString();
+      recomputeEarned();
     } catch (e: any) {
       log(`[seller-mgr] earnings read failed (keeping last): ${e?.message ?? e}`);
     }

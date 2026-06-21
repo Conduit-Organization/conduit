@@ -76,6 +76,7 @@ interface SessionState {
   cumulative: bigint; // total drawn (signed) this session
   deposit: bigint;
   providerPub: string;
+  expiry: bigint; // on-chain channel expiry (unix secs) — past this the seller rejects vouchers
 }
 
 interface ConnRec {
@@ -223,11 +224,29 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
   // Open (or resume) an escrow channel to this seller and get the granted provider pubkey.
   async function ensureSession(rec: ConnRec, offer: SellerOffer): Promise<SessionState> {
     const key = offer.sellerWallet.toLowerCase();
+    // small safety margin so we never start a draw against a channel that expires moments later
+    const now = BigInt(Math.floor(Date.now() / 1000)) + 30n;
+
+    // Reuse a cached session only while it's still within its on-chain expiry. A channel that has
+    // expired can't be reused — the seller rejects vouchers against it ("channel expired") — so
+    // drop the stale cache and reopen below.
     const have = sessionStates.get(key);
-    if (have) return have;
+    if (have && now < have.expiry) return have;
+    if (have) sessionStates.delete(key);
     if (!esc || !escrowWallet) throw new Error('escrow not configured');
 
     let ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
+
+    // An expired-but-still-open channel is unusable, and the contract refuses to open a new one over
+    // it ("already open"). Reclaim the unspent remainder via withdraw — allowed at/after expiry,
+    // which closes the channel — then open a fresh one below. open() bumps the epoch, so vouchers
+    // from the old channel can't be replayed.
+    if (ch.open && BigInt(Math.floor(Date.now() / 1000)) >= ch.expiry) {
+      log(`[storefront] channel → ${offer.sellerWallet.slice(0, 10)}… expired; reclaiming remainder + reopening`);
+      await esc.withdraw(escrowWallet, offer.sellerWallet);
+      ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
+    }
+
     if (!ch.open) {
       log(`[storefront] opening escrow channel → ${offer.sellerWallet.slice(0, 10)}… (deposit ${deposit})`);
       await esc.open(escrowWallet, offer.token, offer.sellerWallet, deposit, duration);
@@ -236,7 +255,7 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     // ask the seller to verify the channel on-chain and grant the gated provider
     send(rec.conn, { type: 'sessionOpen', buyerConsumerPub: deps.consumerPub, buyerWallet: escrowWallet.address, epoch: ch.epoch.toString() });
     const grant = await waitFor(rec, 'sessionGrant', 120_000);
-    const sess: SessionState = { epoch: ch.epoch, cumulative: ch.claimed, deposit: ch.deposit, providerPub: grant.providerPub };
+    const sess: SessionState = { epoch: ch.epoch, cumulative: ch.claimed, deposit: ch.deposit, providerPub: grant.providerPub, expiry: ch.expiry };
     sessionStates.set(key, sess);
     return sess;
   }

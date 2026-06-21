@@ -143,7 +143,7 @@ const routerPromise = (async () => {
 
 async function unlockWith(mnemonic: string): Promise<string> {
   const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
-  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep, reputation });
+  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep, reputation, log: (m) => console.log(m) });
   buyer = acct;
   storefront = sf;
   agent = null; // (re)created lazily once the router is warm
