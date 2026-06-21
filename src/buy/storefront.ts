@@ -107,7 +107,7 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     : null;
   const escrowWallet = esc ? signer.connect(new JsonRpcProvider(deps.rpcUrl)) : null;
   const sessionStates = new Map<string, SessionState>(); // sellerWallet(lower) → session
-  const deposit = deps.depositBaseUnits ?? 50_000n; // 0.05 USD₮
+  const deposit = deps.depositBaseUnits ?? 1_000_000n; // 1 USD₮ — generous so long sessions/demos don't exhaust (~100 answers @ 0.01)
   const duration = deps.sessionDurationSecs ?? 3600;
 
   function offers(): SellerOffer[] {
@@ -282,7 +282,11 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     if (esc && escrowWallet && seller.escrow) {
       const sess = await ensureSession(rec, seller);
       if (sess.cumulative + price > sess.deposit) {
-        throw new Error('channel deposit exhausted — top up to continue'); // caller falls back to local
+        // Channel nearly drained — top it up on-chain so a long session/demo never stalls mid-answer.
+        log(`[storefront] channel low — auto top-up ${deposit} → ${seller.sellerWallet.slice(0, 10)}…`);
+        await esc.topUp(escrowWallet, seller.token, seller.sellerWallet, deposit);
+        const ch = await esc.channel(escrowWallet.address, seller.sellerWallet);
+        sess.deposit = ch.deposit;
       }
       sess.cumulative += price; // running total owed
       const sig = await esc.signVoucher(escrowWallet, seller.sellerWallet, sess.epoch, sess.cumulative);
