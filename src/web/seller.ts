@@ -78,7 +78,13 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
   // the on-chain balance rises, so the total never double-counts or jumps.
   function recomputeEarned() {
     const onChainDelta = earnedAtStart !== null ? (earnedNow ?? earnedAtStart) - earnedAtStart : 0n;
-    st.earned = (onChainDelta + pendingBaseUnits).toString();
+    const settledPlusPending = onChainDelta + pendingBaseUnits;
+    // The session "earned" tile must track answers actually served, even when settlement is batched
+    // (escrow claims only at CLAIM_THRESHOLD) or an on-chain balance read is flaky. Each served
+    // inference earns exactly `price`, so served × price is the floor; surface the larger of it and
+    // the on-chain-settled + pending figure so the tile never lags behind requestsServed.
+    const servedValue = st.price ? BigInt(st.requestsServed) * BigInt(st.price) : 0n;
+    st.earned = (settledPlusPending > servedValue ? settledPlusPending : servedValue).toString();
   }
 
   function ingest(line: string) {
@@ -101,7 +107,8 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
     // grant — NOT the one-time channel session-open, which also logs GRANTED but serves nothing yet.
     if (/GRANTED \(served\)/.test(line) || /payment verified.*GRANTED/.test(line)) {
       st.requestsServed += 1;
-      void refreshEarnings(); // refresh the on-chain delta too (per-inference pays land in the wallet)
+      recomputeEarned();      // immediate: earned tracks served answers regardless of settlement/RPC
+      void refreshEarnings(); // also refresh the on-chain delta (per-inference pays land in the wallet)
     }
   }
 
