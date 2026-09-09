@@ -69,7 +69,7 @@ retroactively.)*
 
 | Sponsor | New work | Status |
 |---|---|---|
-| The Graph | `subgraph/` — indexes `ConduitEscrow` settlement history | ✅ **deployed and synced** — indexes real Sepolia history from block 11014017 |
+| The Graph | `subgraph/` — indexes `ConduitEscrow` settlement history | ✅ **deployed and synced on BOTH networks** — Sepolia from block 11014017, Arc from 61217992 |
 | The Graph | `src/core/graph-reputation.ts` — global seller reputation | ✅ built, 19 tests |
 | The Graph | Blended local+global scoring wired at `server.ts:73`/`:146` | ✅ done |
 | The Graph | Buyer-side abandonment check (bilateral accountability) | ✅ in the `sessionOpen` ladder |
@@ -78,7 +78,7 @@ retroactively.)*
 | World | `humanProof` on the wire protocol | ✅ `protocol.ts` |
 | World | `FEEDBACK.md` | ✅ written during integration; §3 pending Sandbox access |
 | Arc | `src/core/networks.ts` — network profiles | ✅ verified against the live chain |
-| Arc | `ConduitEscrow` deployed to Arc testnet | ⬜ blocked on faucet USDC |
+| Arc | `ConduitEscrow` deployed to Arc testnet | ✅ **deployed + full channel settled end to end in USDC** |
 | All | Sybil-griefing PoC + hardened qualification rules | ✅ 5 contract tests, 26 unit tests |
 | All | Forge-cost calculator | ✅ measured, not estimated |
 | All | Marketplace UI showing the settlement record | ⬜ not started |

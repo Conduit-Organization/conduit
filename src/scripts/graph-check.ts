@@ -93,11 +93,17 @@ async function main(): Promise<void> {
   console.log('\nThe renewal finding (why the naive counter is wrong):');
   const renewed = d.channels.filter((c: any) => c.status === 'RENEWED');
   const withdrawn = d.channels.filter((c: any) => c.status === 'WITHDRAWN');
-  check(
-    'every historical Withdrawn was reclassified as a renewal',
-    Number(m.totalWithdrawn) > 0 && renewed.length === Number(m.totalWithdrawn) && withdrawn.length === 0,
-    `${renewed.length} renewed, ${withdrawn.length} still counted as abandonment`
-  );
+  if (Number(m.totalWithdrawn) === 0) {
+    // A network with no withdrawals has nothing to classify. Say so rather than
+    // failing — this script runs against both settlement networks.
+    check('no withdrawals on this network — nothing to classify', true, 'all channels settled');
+  } else {
+    check(
+      'every historical Withdrawn was reclassified as a renewal',
+      renewed.length === Number(m.totalWithdrawn) && withdrawn.length === 0,
+      `${renewed.length} renewed, ${withdrawn.length} still counted as abandonment`
+    );
+  }
   for (const c of renewed) {
     console.log(`    epoch ${c.epoch}  buyer ${short(c.buyer.id)} → seller ${short(c.seller.id)}`);
     console.log(`      reopened after ${c.secondsUntilBuyerReopened}s · reasons: ${c.disqualificationReasons.join(', ')}`);
