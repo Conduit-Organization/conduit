@@ -69,6 +69,46 @@ retroactively.)*
 
 | Sponsor | New work | Status |
 |---|---|---|
+| The Graph | `subgraph/` — indexes `ConduitEscrow` settlement history | ✅ compiles to WASM; deploy pending a Studio key |
+| The Graph | `src/core/graph-reputation.ts` — global seller reputation | ✅ built, 19 tests |
+| The Graph | Blended local+global scoring wired at `server.ts:73`/`:146` | ✅ done |
+| The Graph | Buyer-side abandonment check (bilateral accountability) | ✅ in the `sessionOpen` ladder |
+| World | `src/core/humanity.ts` — AgentKit / AgentBook verification | ✅ verified live, 11/11 |
+| World | Human-proof gate in the `sessionOpen` reject ladder | ✅ `sell.ts`, seller-side policy |
+| World | `humanProof` on the wire protocol | ✅ `protocol.ts` |
+| World | `FEEDBACK.md` | ✅ written during integration; §3 pending Sandbox access |
+| Arc | `src/core/networks.ts` — network profiles | ✅ verified against the live chain |
+| Arc | `ConduitEscrow` deployed to Arc testnet | ⬜ blocked on faucet USDC |
+| All | Sybil-griefing PoC + hardened qualification rules | ✅ 5 contract tests, 26 unit tests |
+| All | Forge-cost calculator | ✅ measured, not estimated |
+| All | Marketplace UI showing the settlement record | ⬜ not started |
+| All | Demo video (2–4 min) | ⬜ not started |
+
+### What we found while building
+
+Two things worth a judge's attention, both discovered during the event and both
+changing the design rather than decorating it:
+
+1. **`Withdrawn` is forgeable for gas.** `ConduitEscrow.open()` bounds only `amount > 0`
+   and `duration > 0`, so anyone can open a 1-second channel against any address for one
+   base unit and withdraw it in the next block with the deposit returned in full.
+   Measured at **212,331 gas per forged identity**; five of them take an honest seller
+   from 100% to 16.7% on a naive reliability score. Proven in
+   `contracts/test/sybil-grief.test.ts`. The contract is not at fault — a test asserts
+   funds are never at risk — the defect is in deriving reputation from the event, which
+   is our new work.
+
+2. **Every real `Withdrawn` in Conduit's history is a session renewal, not an
+   abandonment.** Both events the Sepolia escrow has ever emitted are followed 24 seconds
+   later by the same buyer reopening with the same seller. That is
+   `src/buy/storefront.ts:244-253` reclaiming an expired channel. A naive counter scores
+   that seller **0.0** for having a loyal repeat customer. This is the stronger finding,
+   because it is already on-chain and a judge can check it on Etherscan.
+
+Both are why the qualification rules in `src/core/qualification.ts` exist, and why the
+naive counter is never shipped — not even briefly.
+
+---|---|---|
 | The Graph | `subgraph/` — indexes `ConduitEscrow` settlement history | ⬜ not started |
 | The Graph | `src/core/graph-reputation.ts` — global seller reputation | ⬜ not started |
 | The Graph | Blended local+global scoring in seller selection | ⬜ not started |
@@ -84,6 +124,15 @@ retroactively.)*
 ## Prior recognition
 
 Conduit was **submitted** to QVAC Hackathon I (June 2026).
+
+---
+
+## Verification of external constants
+
+Every external constant the new work depends on — chain IDs, contract addresses, RPC
+URLs, SDK signatures — is pinned to a primary source, with the method and date of
+verification, in
+[`docs/ethonline/VERIFIED-CONSTANTS.md`](./docs/ethonline/VERIFIED-CONSTANTS.md).
 
 ---
 
