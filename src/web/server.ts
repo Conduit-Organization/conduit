@@ -25,6 +25,8 @@ const { createStorefront } = await import('../buy/storefront');
 const { createMarketAgent } = await import('../buy/market-agent');
 const { loadEscrowDeployment } = await import('../core/escrow');
 const { createReputation } = await import('../core/reputation');
+const { createGraphReputation } = await import('../core/graph-reputation');
+const { createHumanity } = await import('../core/humanity');
 const { createSellerManager } = await import('./seller');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
@@ -70,7 +72,26 @@ const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
 // Escrow (payment-channel) mode is opt-in: CONDUIT_ESCROW=1 + a deployed contract. The seller child
 // inherits CONDUIT_ESCROW via the spawned env, so enabling it here turns it on for both roles.
 const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : null;
-const reputation = createReputation(); // first-party seller reputation (persists to ~/.conduit/reputation.json)
+// ── ETHOnline 2026 ─────────────────────────────────────────────────────────────
+// First-party reputation (what I myself experienced) is unchanged and still the
+// authority once it has evidence. The Graph layer wraps it to fill the cold-start hole:
+// without it, every seller this buyer has never met scores a flat 0.5 and "Auto"
+// degrades to price-then-speed. Both additions are opt-in by env; with neither set the
+// app behaves exactly as it did before.
+const localReputation = createReputation(); // persists to ~/.conduit/reputation.json
+const humanity = process.env.CONDUIT_HUMAN_PROOF === '1'
+  ? createHumanity({ worldChainRpcUrl: process.env.CONDUIT_WORLDCHAIN_RPC, log: (m) => console.log(m) })
+  : null;
+const graphEndpoint = process.env.CONDUIT_SUBGRAPH_URL || null;
+const reputation = graphEndpoint
+  ? createGraphReputation({ endpoint: graphEndpoint, local: localReputation, humanity, log: (m) => console.log(m) })
+  : localReputation;
+if (graphEndpoint) {
+  console.log('[engine] global reputation: The Graph @ ' + graphEndpoint.replace(/\/[0-9a-f]{20,}\//i, '/<api-key>/'));
+  void (reputation as any).refresh?.();
+} else {
+  console.log('[engine] global reputation: disabled (set CONDUIT_SUBGRAPH_URL) — local first-party only');
+}
 
 // Seller mode: the engine manages the proven sell.ts as a child (spawn/kill/inspect). It earns into
 // account index 1 of the unlocked wallet (distinct from the buyer's index 0). See src/web/seller.ts.
@@ -143,7 +164,7 @@ const routerPromise = (async () => {
 
 async function unlockWith(mnemonic: string): Promise<string> {
   const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
-  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep, reputation, log: (m) => console.log(m) });
+  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep, reputation, humanity, log: (m) => console.log(m) });
   buyer = acct;
   storefront = sf;
   agent = null; // (re)created lazily once the router is warm

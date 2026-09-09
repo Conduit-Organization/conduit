@@ -68,6 +68,34 @@ const escrowWallet: BaseWallet | null = esc
 const sessions = new Map<string, { buyerPub: string; epoch: bigint; deposit: bigint; cumulative: bigint; lastSig: string; claimed: bigint; claiming: boolean }>();
 const CLAIM_THRESHOLD = 50_000n; // redeem on-chain once unclaimed earnings reach 0.05 USD₮
 
+// ── ETHOnline 2026: who the buyer is ───────────────────────────────────────────
+// Seller-side POLICY, both opt-in. A seller who wants to sell to any funded keypair
+// changes nothing and behaves exactly as before; a seller who only wants to sell to
+// verified humans sets CONDUIT_REQUIRE_HUMAN=1. That choice is what makes this a market
+// rather than a rule imposed on everyone.
+const { createHumanity } = await import('../core/humanity');
+const { createGraphReputation } = await import('../core/graph-reputation');
+const { createReputation } = await import('../core/reputation');
+
+const requireHuman = process.env.CONDUIT_REQUIRE_HUMAN === '1';
+const humanity = requireHuman
+  ? createHumanity({ worldChainRpcUrl: process.env.CONDUIT_WORLDCHAIN_RPC, log: (m) => console.log(m) })
+  : null;
+
+/** Reject a buyer whose qualified abandonment rate exceeds this. 0.5 = half their channels. */
+const MAX_BUYER_ABANDONMENT = Number(process.env.CONDUIT_MAX_BUYER_ABANDONMENT || '0.5');
+const graphEndpoint = process.env.CONDUIT_SUBGRAPH_URL || null;
+const graphRep = graphEndpoint
+  ? createGraphReputation({
+      endpoint: graphEndpoint,
+      local: createReputation(),
+      humanity,
+      log: (m) => console.log(m),
+    })
+  : null;
+if (graphRep) void graphRep.refresh(); // warm the cache; never blocks a session
+console.log(`[seller] policy: requireHuman=${requireHuman ? 'on' : 'off'}, buyerHistory=${graphRep ? 'on' : 'off'}`);
+
 // Total earnings signed-for but not yet redeemed on-chain, across all live sessions. Vouchers are
 // settled in batches (CLAIM_THRESHOLD) to save gas, so a freshly-served request earns USD₮ that
 // won't hit the wallet for a while. The engine adds this to the on-chain delta so the seller's live
@@ -154,6 +182,29 @@ swarm.on('connection', (conn: any) => {
       if (ch.deposit < offer.priceBaseUnits) { send(conn, { type: 'reject', reason: 'deposit below price' }); return; }
       if (Number(ch.expiry) <= now) { send(conn, { type: 'reject', reason: 'channel expired' }); return; }
       if (ch.epoch.toString() !== m.epoch) { send(conn, { type: 'reject', reason: 'epoch mismatch' }); return; }
+      // ── ETHOnline 2026: the checks above are all ECONOMIC. These two ask who the
+      // buyer is. They sit here, after payment is established and before the grant, as
+      // peers of the economic checks — a verified human with no funded channel is still
+      // rejected above, and a funded channel is now not enough on its own.
+      if (humanity) {
+        const h = await humanity.verify(m.humanProof, m.buyerWallet, seller.address);
+        if (!h.ok) {
+          console.log('[seller] REJECT unverified human:', h.reason);
+          send(conn, { type: 'reject', reason: 'unverified human' });
+          return;
+        }
+        console.log(`[seller] human verified (id ${h.humanId!.slice(0, 10)}…)`);
+      }
+      // Accountability runs both ways: the buyer reads the seller's settlement record
+      // before choosing, and the seller reads the buyer's before granting.
+      if (graphRep) {
+        const rate = graphRep.buyerAbandonmentRate(m.buyerWallet);
+        if (rate > MAX_BUYER_ABANDONMENT) {
+          console.log(`[seller] REJECT buyer abandonment history: ${(rate * 100).toFixed(0)}%`);
+          send(conn, { type: 'reject', reason: 'buyer abandonment history' });
+          return;
+        }
+      }
       sessions.set(m.buyerWallet.toLowerCase(), { buyerPub: m.buyerConsumerPub, epoch: ch.epoch, deposit: ch.deposit, cumulative: ch.claimed, lastSig: '', claimed: ch.claimed, claiming: false });
       const pub = await ensureProvider(m.buyerConsumerPub);
       send(conn, { type: 'sessionGrant', providerPub: pub, epoch: ch.epoch.toString() });

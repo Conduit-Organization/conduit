@@ -10,6 +10,7 @@ import { Wallet as EthWallet, JsonRpcProvider } from 'ethers';
 import { send, onMessages, bindMessage, type Msg } from '../core/protocol';
 import { createEscrowClient, type EscrowClient } from '../core/escrow';
 import type { Reputation } from '../core/reputation';
+import type { Humanity, HumanProof } from '../core/humanity';
 import type { ConduitAccount } from '../core/wallet';
 
 const TOPIC = crypto.createHash('sha256').update('conduit:market:v1').digest();
@@ -68,6 +69,10 @@ export interface StorefrontDeps {
   depositBaseUnits?: bigint; // per-channel deposit (default 0.05 USD₮)
   sessionDurationSecs?: number; // channel expiry (default 1h)
   reputation?: Reputation; // first-party seller reputation (ranks "Auto", shown in the marketplace)
+  // ETHOnline 2026: when supplied, the buyer proves a unique human is behind this wallet
+  // and attaches the proof to `sessionOpen`. Sellers running `requireHuman` need it;
+  // sellers that don't ignore it. Absent = unchanged pre-existing behaviour.
+  humanity?: Humanity | null;
   log?: (m: string) => void;
 }
 
@@ -252,8 +257,26 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       await esc.open(escrowWallet, offer.token, offer.sellerWallet, deposit, duration);
       ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
     }
+    // ETHOnline 2026: prove a unique human is behind this wallet, if we can. The proof
+    // is bound to THIS seller and THIS epoch, so it cannot be replayed to another seller
+    // or reused for a later session. A failure here is not fatal — the seller decides
+    // whether it cares, and a seller that doesn't require one still grants.
+    let humanProof: HumanProof | undefined;
+    if (deps.humanity) {
+      try {
+        humanProof = await deps.humanity.prove(
+          escrowWallet.address,
+          offer.sellerWallet,
+          (msg) => escrowWallet.signMessage(msg),
+          { epoch: ch.epoch.toString() }
+        );
+      } catch (e: any) {
+        log(`[storefront] could not build a human proof (${e?.message ?? e}) — continuing without one`);
+      }
+    }
+
     // ask the seller to verify the channel on-chain and grant the gated provider
-    send(rec.conn, { type: 'sessionOpen', buyerConsumerPub: deps.consumerPub, buyerWallet: escrowWallet.address, epoch: ch.epoch.toString() });
+    send(rec.conn, { type: 'sessionOpen', buyerConsumerPub: deps.consumerPub, buyerWallet: escrowWallet.address, epoch: ch.epoch.toString(), humanProof });
     const grant = await waitFor(rec, 'sessionGrant', 120_000);
     const sess: SessionState = { epoch: ch.epoch, cumulative: ch.claimed, deposit: ch.deposit, providerPub: grant.providerPub, expiry: ch.expiry };
     sessionStates.set(key, sess);
