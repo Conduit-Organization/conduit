@@ -24,6 +24,7 @@
     "demo": "tsx src/scripts/demo.ts",
     "audit": "tsx src/scripts/audit-demo.ts",
     "escrow-demo": "tsx src/scripts/escrow-demo.ts",
+    "humanity-check": "tsx src/scripts/humanity-check.ts",
     "web": "tsx src/web/server.ts",
     "app:install": "npm --prefix app install",
     "app:dev": "npm --prefix app run dev",
@@ -55,19 +56,26 @@
       "output": "release"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.png",
       "artifactName": "Conduit-${version}-${arch}.${ext}",
       "identity": null
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.png",
       "artifactName": "Conduit-${version}-Setup.${ext}"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Development",
       "icon": "build/icon.png"
     }
@@ -75,6 +83,7 @@
   "dependencies": {
     "@qvac/sdk": "^0.12.0",
     "@tetherto/wdk-wallet-evm": "^1.0.0-beta.13",
+    "@worldcoin/agentkit-core": "^0.2.1",
     "b4a": "^1.8.1",
     "hyperdht": "^6.32.0",
     "hyperswarm": "^4.17.0",
