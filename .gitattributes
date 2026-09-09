@@ -1,0 +1,8 @@
+# Lockfiles are generated. Marking them keeps `git diff --stat` and GitHub's compare view
+# readable: npm regenerates the whole file when the toolchain version differs from the one
+# that wrote it, which produces thousands of lines of churn for a one-line dependency
+# change. Judges reading the ETHOnline diff should see the work, not the lockfile.
+package-lock.json           linguist-generated=true
+app/package-lock.json       linguist-generated=true
+contracts/package-lock.json linguist-generated=true
+subgraph/package-lock.json  linguist-generated=true
