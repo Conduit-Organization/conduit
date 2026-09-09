@@ -69,7 +69,7 @@ retroactively.)*
 
 | Sponsor | New work | Status |
 |---|---|---|
-| The Graph | `subgraph/` — indexes `ConduitEscrow` settlement history | ✅ compiles to WASM; deploy pending a Studio key |
+| The Graph | `subgraph/` — indexes `ConduitEscrow` settlement history | ✅ **deployed and synced** — indexes real Sepolia history from block 11014017 |
 | The Graph | `src/core/graph-reputation.ts` — global seller reputation | ✅ built, 19 tests |
 | The Graph | Blended local+global scoring wired at `server.ts:73`/`:146` | ✅ done |
 | The Graph | Buyer-side abandonment check (bilateral accountability) | ✅ in the `sessionOpen` ladder |
