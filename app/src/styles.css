@@ -734,6 +734,36 @@ body::after {
 .ms-addr { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); }
 .ms-state { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted-2); margin-top: 2px; }
 .ms-state.on { color: var(--mint); }
+
+/* --- ETHOnline 2026: global settlement record on each seller card --------- */
+/* The banner is deliberately explicit about whether the layer is LIVE, so the UI
+   never shows first-party numbers as though they were global. */
+.ms-graph {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--ink-2); border: 1px solid var(--line); border-left: 2px solid var(--line-2);
+  border-radius: 12px; padding: 11px 14px; margin-bottom: 12px;
+  font-size: 12.5px; line-height: 1.55; color: var(--muted);
+}
+.ms-graph.live { border-left-color: var(--mint); background: linear-gradient(90deg, var(--mint-soft), var(--ink-2) 42%); }
+.ms-graph b { color: var(--text); font-weight: 600; }
+.ms-graph code { font-family: var(--font-mono); font-size: 11.5px; color: var(--mint); }
+.ms-graph .mdot { margin-top: 5px; flex: none; }
+
+/* The seller's record across ALL buyers, as opposed to .ms-rep which is yours alone. */
+.ms-chain { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1px; }
+.ms-chain.new { color: var(--muted-2); }
+.ms-chain.good { color: var(--mint); }
+.ms-chain.ok { color: var(--amber); }
+.ms-chain.bad { color: #ff8b8b; }
+
+/* Signals the qualification rules excluded. Shown rather than hidden — the whole
+   claim is that the filtering is auditable, so it has to be visible in the product. */
+.ms-excluded {
+  font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
+  color: var(--muted-2); border-left: 2px solid var(--line-2);
+  padding-left: 7px; margin-top: 1px;
+}
+.ms-excluded .naive { color: #ff8b8b; opacity: 0.85; }
 .ms-empty { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); padding: 18px 2px; }
 .ms-empty code { font-family: var(--font-mono); color: var(--mint); font-size: 12.5px; }
 .ms-empty b { color: var(--text); }

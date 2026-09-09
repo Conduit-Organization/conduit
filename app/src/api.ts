@@ -11,6 +11,37 @@ export interface Peer {
   served: number; // paid answers this seller has delivered to you
   failed: number; // failed attempts
   successRate: number; // [0,1], neutral 0.5 until there's history
+  // ETHOnline 2026 — the blended score "Auto" actually sorts on, and the seller's
+  // global settlement record from The Graph. `global` is null when the subgraph is
+  // not configured or the seller has no on-chain history.
+  score?: number;
+  global?: GlobalRecord | null;
+}
+
+/** A seller's settlement record across ALL buyers, indexed from ConduitEscrow. */
+export interface GlobalRecord {
+  settled: number;
+  /** The only figure that scores against a seller — passed every qualification rule. */
+  qualifiedWithdrawn: number;
+  /** Withdrawals excluded as probes: too short, too small, or by a buyer with no history. */
+  probeChannels: number;
+  /** Withdrawals that were session renewals — the buyer immediately came back. */
+  renewals: number;
+  uniqueVerifiedBuyers: number;
+  totalClaimed: string;
+  reliability: number;
+  globalScore: number;
+  /** What a naive settled/(settled+withdrawn) tally would have read. */
+  naiveReliability: number;
+}
+
+/** Whether the global-reputation layer is actually live, so the UI never implies it is. */
+export interface GraphStatus {
+  enabled: boolean;
+  live: boolean;
+  /** True when breadth counts verified humans rather than distinct addresses. */
+  countsHumans: boolean;
+  error: string | null;
 }
 
 export interface WalletStatus {
@@ -33,6 +64,9 @@ export interface State {
   selected?: string;
   escrow?: boolean; // escrow (payment-channel) mode is enabled on this engine
   sessions?: EscrowSession[]; // open payment channels (instant paid answers)
+  graph?: GraphStatus; // ETHOnline 2026 — global reputation layer status
+  humanProof?: boolean; // this engine attaches a World human proof to sessions
+  network?: { name: string; label: string; explorer: string; symbol: string };
   ready: boolean;
   setupErr: string | null;
   modelProgress?: ModelProgress;
@@ -55,6 +89,7 @@ export interface ModelProgress {
 export interface SellersResp {
   sellers: Peer[];
   selected: string;
+  graph?: GraphStatus;
 }
 
 export type DeclineReason = 'no-seller' | 'budget' | 'error';

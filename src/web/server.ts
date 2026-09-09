@@ -27,6 +27,7 @@ const { loadEscrowDeployment } = await import('../core/escrow');
 const { createReputation } = await import('../core/reputation');
 const { createGraphReputation } = await import('../core/graph-reputation');
 const { createHumanity } = await import('../core/humanity');
+const { reliability, globalScore } = await import('../core/qualification');
 const { createSellerManager } = await import('./seller');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
@@ -199,10 +200,53 @@ function json(res: http.ServerResponse, code: number, obj: unknown) {
   res.end(JSON.stringify(obj));
 }
 
+// ETHOnline 2026: the seller's GLOBAL settlement record, read from the subgraph.
+// Returns null when the Graph layer is not configured or has not synced, so the UI can
+// fall back to first-party counts exactly as it did before.
+function globalJson(sellerWallet: string) {
+  const rep: any = reputation;
+  const g = rep.globalRecord?.(sellerWallet);
+  if (!g) return null;
+  return {
+    settled: g.settled,
+    // The only figure that scores against a seller. Withdrawals excluded by the
+    // qualification rules are surfaced separately rather than hidden.
+    qualifiedWithdrawn: g.qualifiedWithdrawn,
+    probeChannels: g.probeChannels,
+    renewals: g.renewals,
+    uniqueVerifiedBuyers: g.uniqueVerifiedBuyers,
+    totalClaimed: formatUnits(g.totalClaimed, DEC),
+    reliability: reliability(g),
+    globalScore: globalScore(g),
+    // What a naive settled/(settled+withdrawn) tally would have produced. Shown beside
+    // the hardened figure so the difference is visible rather than asserted.
+    naiveReliability:
+      g.settled + g.qualifiedWithdrawn + g.probeChannels + g.renewals === 0
+        ? 0.5
+        : g.settled / (g.settled + g.qualifiedWithdrawn + g.probeChannels + g.renewals),
+  };
+}
+
 function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean; served?: number; failed?: number; successRate?: number }) {
   return {
     id: o.id, address: o.sellerWallet, model: o.model, price: formatUnits(o.priceBaseUnits, DEC), tps: o.tps, online: o.online,
     served: o.served ?? 0, failed: o.failed ?? 0, successRate: o.successRate ?? 0.5,
+    // The blended score the "Auto" sort actually uses (storefront.ts:126-128).
+    score: reputation.score(o.sellerWallet),
+    global: globalJson(o.sellerWallet),
+  };
+}
+
+// Status of the global-reputation layer, so the UI can say plainly whether it is live
+// rather than silently showing first-party numbers as if they were global.
+function graphStatusJson() {
+  const rep: any = reputation;
+  if (!graphEndpoint) return { enabled: false, live: false, countsHumans: false, error: null };
+  return {
+    enabled: true,
+    live: !!rep.isLive?.(),
+    countsHumans: !!rep.breadthCountsHumans?.(),
+    error: rep.lastError?.() ?? null,
   };
 }
 
@@ -326,6 +370,9 @@ const server = http.createServer((req, res) => {
           spent: formatUnits(BigInt(s.cumulative), DEC),
           remaining: formatUnits(BigInt(s.remaining), DEC),
         })),
+        graph: graphStatusJson(),
+        humanProof: !!humanity,
+        network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol },
         ready: routerReady && !setupErr,
         setupErr: setupErr ?? null,
         modelProgress,
@@ -336,7 +383,7 @@ const server = http.createServer((req, res) => {
     // ---------- marketplace ----------
     if (req.method === 'GET' && p === '/api/sellers') {
       if (!storefront) { json(res, 200, { sellers: [], selected: 'auto' }); return; }
-      json(res, 200, { sellers: storefront.list().map(offerJson), selected: storefront.selectedId() });
+      json(res, 200, { sellers: storefront.list().map(offerJson), selected: storefront.selectedId(), graph: graphStatusJson() });
       return;
     }
     if (req.method === 'POST' && p === '/api/select') {

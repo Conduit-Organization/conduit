@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { State, Peer } from '../api';
+import type { State, Peer, GlobalRecord } from '../api';
 import { Star } from './icons';
 import { fmt, short, modelName } from '../format';
 import * as bm from '../bookmarks';
@@ -7,6 +7,11 @@ import * as bm from '../bookmarks';
 // The buyer's landing screen (Binance-P2P style): browse sellers, ★ bookmark, pick one — or Auto —
 // then enter chat. Choosing a seller ≠ paying: easy questions still answer free on-device; the chosen
 // seller is paid only when a question escalates.
+//
+// ETHOnline 2026: each card now also shows the seller's GLOBAL settlement record, indexed
+// from ConduitEscrow by The Graph — how they have treated everyone, not just you. Where a
+// naive settled-vs-withdrawn tally would disagree with the hardened reading, both numbers
+// are shown, because the difference is the whole point.
 export default function MarketplaceScreen({
   state,
   sellers,
@@ -19,6 +24,7 @@ export default function MarketplaceScreen({
   const [marks, setMarks] = useState<bm.Bookmark[]>([]);
   useEffect(() => { setMarks(bm.load()); }, []);
 
+  const graph = state?.graph;
   const online = sellers.filter((s) => s.online);
   const byAddr = new Map(sellers.map((s) => [s.address.toLowerCase(), s]));
 
@@ -28,6 +34,18 @@ export default function MarketplaceScreen({
     if (n === 0) return { label: 'new peer', cls: 'new' };
     const pct = Math.round(s.successRate * 100);
     return { label: `★ ${pct}% · ${s.served} served`, cls: pct >= 90 ? 'good' : pct >= 60 ? 'ok' : 'bad' };
+  }
+
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+
+  // Withdrawals the qualification rules excluded: still indexed, still queryable, but
+  // not counted against the seller. Surfaced so the filtering is visible, not implicit.
+  const excludedCount = (g: GlobalRecord) => g.probeChannels + g.renewals;
+
+  function chainClass(g: GlobalRecord): string {
+    if (g.settled + g.qualifiedWithdrawn === 0) return 'new';
+    if (g.reliability >= 0.9) return 'good';
+    return g.reliability >= 0.6 ? 'ok' : 'bad';
   }
 
   function toggleMark(s: Peer | bm.Bookmark, e: React.MouseEvent) {
@@ -83,14 +101,35 @@ export default function MarketplaceScreen({
 
       <section className="ms-section">
         <div className="ms-label">Sellers</div>
+
+        {graph?.enabled && (
+          <div className={`ms-graph${graph.live ? ' live' : ''}`}>
+            <i className="mdot on" />
+            {graph.live ? (
+              <span>
+                <b>On-chain reputation live.</b> Every seller below carries a settlement record
+                indexed from <code>ConduitEscrow</code> — how they have treated{' '}
+                <b>everyone</b>, not just you.
+                {graph.countsHumans
+                  ? ' Reach counts verified humans, not addresses.'
+                  : ' Reach counts distinct addresses — enable the human gate to count people.'}
+              </span>
+            ) : (
+              <span>
+                Global reputation configured but not yet synced
+                {graph.error ? ` — ${graph.error}` : '…'}. Showing your own history only.
+              </span>
+            )}
+          </div>
+        )}
         <div className="ms-grid">
           <button className="ms-card auto" onClick={() => onPick('auto')}>
             <div className="ms-card-top">
               <span className="ms-model"><b>Auto</b></span>
               {state?.selected === 'auto' && <span className="ms-check">✓ active</span>}
             </div>
-            <div className="ms-sub">cheapest, then fastest</div>
-            <div className="ms-addr">picks the best peer for each paid answer</div>
+            <div className="ms-sub">best record, then cheapest</div>
+            <div className="ms-addr">ranks on settlement history, then price and speed</div>
             <div className="ms-state on">tap to use</div>
           </button>
 
@@ -119,6 +158,31 @@ export default function MarketplaceScreen({
                 <div className="ms-sub">{fmt(s.price)} USD₮ · {Math.round(s.tps)} tps</div>
                 <div className="ms-addr">{short(s.address)}</div>
                 <div className={`ms-rep ${rep(s).cls}`}>{rep(s).label}</div>
+
+                {s.global ? (
+                  <>
+                    <div className={`ms-chain ${chainClass(s.global)}`}>
+                      ⛓ {s.global.settled} settled
+                      {s.global.qualifiedWithdrawn > 0 && ` · ${s.global.qualifiedWithdrawn} abandoned`}
+                      {s.global.settled + s.global.qualifiedWithdrawn > 0 && ` · ${pct(s.global.reliability)}`}
+                      {s.global.settled + s.global.qualifiedWithdrawn === 0 && ' · no record yet'}
+                    </div>
+                    {excludedCount(s.global) > 0 && (
+                      <div className="ms-excluded" title="Indexed and queryable — excluded from scoring by the published rules">
+                        {excludedCount(s.global)} signal{excludedCount(s.global) === 1 ? '' : 's'} excluded
+                        {s.global.probeChannels > 0 && ` · ${s.global.probeChannels} probe`}
+                        {s.global.renewals > 0 && ` · ${s.global.renewals} renewal`}
+                        <br />
+                        <span className="naive">a naive count would read {pct(s.global.naiveReliability)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  graph?.enabled && graph.live && (
+                    <div className="ms-chain new">⛓ no on-chain history</div>
+                  )
+                )}
+
                 <div className={`ms-state${s.online ? ' on' : ''}`}>
                   {s.online ? (state?.selected === s.id ? '✓ active — tap to use' : 'online — tap to use') : 'offline'}
                 </div>
