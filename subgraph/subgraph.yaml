@@ -1,0 +1,55 @@
+# Conduit settlement-history subgraph — ETHOnline 2026 (new work).
+#
+# Network + address are supplied per-network from networks.json, so the SAME manifest
+# deploys against both of Conduit's settlement networks:
+#
+#   graph deploy conduit-settlement-sepolia     --network sepolia
+#   graph deploy conduit-settlement-arc-testnet --network arc-testnet
+#
+# Both `sepolia` (eip155:11155111) and `arc-testnet` (eip155:5042002) are Subgraph
+# Studio networks — verified against The Graph's canonical networks registry v0.7.119.
+# See docs/ethonline/VERIFIED-CONSTANTS.md.
+specVersion: 1.0.0
+description: >-
+  Global seller settlement history for Conduit, a serverless P2P AI-inference market.
+  Turns ConduitEscrow's payment-channel events into an auditable, sybil-resistant
+  reputation signal that a buyer's client reads before choosing a seller.
+repository: https://github.com/Conduit-Organization/conduit
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: ConduitEscrow
+    # Overridden per-network by networks.json; these are the Sepolia defaults.
+    network: sepolia
+    source:
+      address: "0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7"
+      abi: ConduitEscrow
+      # Contract creation block, from the explorer's contract-creation record.
+      # Do NOT binary-search eth_getCode for this: the public Sepolia RPC is not an
+      # archive node and the search lands ~640k blocks too high.
+      startBlock: 11014017
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/escrow.ts
+      entities:
+        - Seller
+        - Buyer
+        - Channel
+        - Market
+      abis:
+        - name: ConduitEscrow
+          file: ./abis/ConduitEscrow.json
+      eventHandlers:
+        - event: ChannelOpened(indexed address,indexed address,uint256,uint64,uint64)
+          handler: handleChannelOpened
+        - event: ToppedUp(indexed address,indexed address,uint256,uint256)
+          handler: handleToppedUp
+        - event: Claimed(indexed address,indexed address,uint256,uint256)
+          handler: handleClaimed
+        - event: Settled(indexed address,indexed address,uint256,uint256)
+          handler: handleSettled
+        - event: Withdrawn(indexed address,indexed address,uint256)
+          handler: handleWithdrawn

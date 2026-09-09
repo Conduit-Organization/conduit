@@ -1,0 +1,144 @@
+# Conduit settlement-history subgraph — ETHOnline 2026 (new work).
+#
+# Indexes ConduitEscrow so that a buyer's client can read a seller's GLOBAL settlement
+# record before choosing who to buy from. Conduit's existing reputation
+# (src/core/reputation.ts) is first-party only — "how has this seller treated ME?" — and
+# returns 0.5 for every seller a buyer has not personally met. This answers "how has
+# this seller treated EVERYONE?".
+#
+# IMPORTANT: the counters here are NOT a naive settled-vs-withdrawn tally. A `Withdrawn`
+# event is forgeable for gas (contracts/test/sybil-grief.test.ts) and, in Conduit's real
+# history, is usually a session renewal rather than an abandonment. The qualification
+# rules in src/core/qualification.ts decide which withdrawals count; this schema keeps
+# the disqualified ones VISIBLE (probeChannels, renewals) rather than hiding them, so
+# the rule can be audited instead of trusted.
+
+type Seller @entity(immutable: false) {
+  "Seller wallet address."
+  id: Bytes!
+
+  channelsOpened: BigInt!
+  "Channels this seller settled — payment completed, channel closed."
+  channelsSettled: BigInt!
+
+  "Withdrawals that PASSED the on-chain qualification rules. The real adverse signal."
+  qualifiedWithdrawn: BigInt!
+  "Withdrawals rejected as probes: too short, too small, or by a buyer with no history."
+  probeChannels: BigInt!
+  "Withdrawals reclassified as session renewals — the buyer immediately reopened."
+  renewals: BigInt!
+  "Every withdrawal regardless of classification. Published so the filtering is auditable."
+  withdrawnTotal: BigInt!
+
+  "Base units actually earned by this seller (sum of Claimed.paid + Settled.toSeller)."
+  totalClaimed: BigInt!
+  "Base units returned to buyers when this seller settled."
+  totalRefunded: BigInt!
+
+  "Distinct buyer addresses. NOT distinct humans — see uniqueBuyers vs the World gate."
+  uniqueBuyers: BigInt!
+
+  firstSeen: BigInt!
+  lastSettled: BigInt
+  channels: [Channel!]! @derivedFrom(field: "seller")
+}
+
+type Buyer @entity(immutable: false) {
+  "Buyer wallet address."
+  id: Bytes!
+
+  channelsOpened: BigInt!
+  "Channels this buyer saw through to settlement — the proof-of-participation counter."
+  channelsSettled: BigInt!
+  "Channels this buyer withdrew from, all classifications."
+  channelsWithdrawn: BigInt!
+  """
+  Withdrawals by this buyer that were NOT renewals and NOT settled first: the buyer
+  locked a deposit, took the session, and walked. Feeds the seller-side
+  'buyer abandonment history' check — accountability runs both ways.
+  """
+  channelsAbandoned: BigInt!
+
+  totalDeposited: BigInt!
+  firstSeen: BigInt!
+  channels: [Channel!]! @derivedFrom(field: "buyer")
+}
+
+enum ChannelStatus {
+  OPEN
+  SETTLED
+  "Closed by the buyer reclaiming the remainder after expiry."
+  WITHDRAWN
+  "A WITHDRAWN channel the same buyer reopened with the same seller within the renewal window."
+  RENEWED
+}
+
+"Why a withdrawal does not count against the seller. Empty when it does count."
+enum DisqualificationReason {
+  DURATION_TOO_SHORT
+  DEPOSIT_TOO_SMALL
+  BUYER_HAS_NO_SETTLEMENT_HISTORY
+  WITHDRAWAL_IS_A_RENEWAL
+}
+
+type Channel @entity(immutable: false) {
+  "buyer-seller-epoch"
+  id: ID!
+  buyer: Buyer!
+  seller: Seller!
+  epoch: BigInt!
+
+  deposit: BigInt!
+  claimed: BigInt!
+  refunded: BigInt!
+  expiry: BigInt!
+  "expiry - openedAt. The griefing PoC makes this 1; a real session is >= 600."
+  durationSecs: BigInt!
+
+  status: ChannelStatus!
+  openedAt: BigInt!
+  closedAt: BigInt
+  openTx: Bytes!
+  closeTx: Bytes
+
+  """
+  Whether this channel's Withdrawn event counts against the seller, judged on the rules
+  a subgraph can evaluate alone. The World-verified-buyer rule is NOT included: AgentBook
+  lives on World Chain and a subgraph cannot read another chain, so that rule is layered
+  on client-side in src/core/graph-reputation.ts. Null until the channel closes.
+  """
+  qualifiedOnChain: Boolean
+  disqualificationReasons: [DisqualificationReason!]!
+  "Seconds until the same buyer reopened with the same seller. Null if they never did."
+  secondsUntilBuyerReopened: BigInt
+}
+
+"Singleton (id: 'market') — totals for the marketplace UI and the forge-cost display."
+type Market @entity(immutable: false) {
+  id: ID!
+  totalChannelsOpened: BigInt!
+  totalSettled: BigInt!
+  totalWithdrawn: BigInt!
+  totalQualifiedWithdrawn: BigInt!
+  totalProbeChannels: BigInt!
+  totalRenewals: BigInt!
+  totalClaimed: BigInt!
+  sellerCount: BigInt!
+  buyerCount: BigInt!
+  lastUpdatedBlock: BigInt!
+}
+
+"""
+Per (buyer, seller) pair bookkeeping. ConduitEscrow's `Settled` and `Withdrawn` events
+do not carry the epoch, but they always close the pair's current channel — and `open()`
+only ever increments the epoch. So the pair's latest epoch is how a handler finds the
+channel an event refers to.
+"""
+type Pair @entity(immutable: false) {
+  "buyer-seller"
+  id: ID!
+  buyer: Buyer!
+  seller: Seller!
+  latestEpoch: BigInt!
+  channelCount: BigInt!
+}
