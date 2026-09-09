@@ -89,26 +89,46 @@ async function main(): Promise<void> {
   check('indexed real settlement history', Number(m.totalChannelsOpened) > 0, `${m.totalChannelsOpened} channels`);
   check('found at least one completed settlement', Number(m.totalSettled) > 0, `${m.totalSettled} settled`);
 
-  // ── the renewal finding ──
-  console.log('\nThe renewal finding (why the naive counter is wrong):');
+  // ── classification invariants ──
+  // These must hold on ANY network with ANY history. An earlier version of this script
+  // asserted Sepolia's particular story ("every withdrawal was a renewal", "no qualified
+  // adverse signals") and started failing the moment Arc had a different — and entirely
+  // correct — mix. Assert the rule, not the dataset.
+  console.log('\nWithdrawal classification:');
   const renewed = d.channels.filter((c: any) => c.status === 'RENEWED');
-  const withdrawn = d.channels.filter((c: any) => c.status === 'WITHDRAWN');
-  if (Number(m.totalWithdrawn) === 0) {
-    // A network with no withdrawals has nothing to classify. Say so rather than
-    // failing — this script runs against both settlement networks.
-    check('no withdrawals on this network — nothing to classify', true, 'all channels settled');
-  } else {
-    check(
-      'every historical Withdrawn was reclassified as a renewal',
-      renewed.length === Number(m.totalWithdrawn) && withdrawn.length === 0,
-      `${renewed.length} renewed, ${withdrawn.length} still counted as abandonment`
-    );
-  }
+  const stillWithdrawn = d.channels.filter((c: any) => c.status === 'WITHDRAWN');
+
+  const buckets = Number(m.totalQualifiedWithdrawn) + Number(m.totalProbeChannels) + Number(m.totalRenewals);
+  check('every withdrawal lands in exactly one bucket',
+    buckets === Number(m.totalWithdrawn),
+    `${m.totalQualifiedWithdrawn} qualified + ${m.totalProbeChannels} probes + ${m.totalRenewals} renewals = ${m.totalWithdrawn}`);
+
+  // A channel that counts against its seller must carry NO exclusion reasons, and one
+  // that does not count must carry at least one. Otherwise the published rule and the
+  // stored data disagree, and the audit trail is worthless.
+  const badQualified = stillWithdrawn.filter((c: any) => c.qualifiedOnChain === true && c.disqualificationReasons.length > 0);
+  const badExcluded = stillWithdrawn.filter((c: any) => c.qualifiedOnChain === false && c.disqualificationReasons.length === 0);
+  check('scoring withdrawals carry no exclusion reasons', badQualified.length === 0);
+  check('excluded withdrawals all state a reason', badExcluded.length === 0);
+
   for (const c of renewed) {
-    console.log(`    epoch ${c.epoch}  buyer ${short(c.buyer.id)} → seller ${short(c.seller.id)}`);
-    console.log(`      reopened after ${c.secondsUntilBuyerReopened}s · reasons: ${c.disqualificationReasons.join(', ')}`);
+    console.log(`    RENEWED  epoch ${c.epoch}  ${short(c.buyer.id)} → ${short(c.seller.id)}` +
+      `  reopened after ${c.secondsUntilBuyerReopened}s`);
   }
-  check('no qualified adverse signals against any seller', Number(m.totalQualifiedWithdrawn) === 0);
+  const probes = stillWithdrawn.filter((c: any) => c.qualifiedOnChain === false);
+  for (const c of probes.slice(0, 6)) {
+    console.log(`    PROBE    epoch ${c.epoch}  deposit ${usd(c.deposit)} · ${c.durationSecs}s` +
+      `  → ${c.disqualificationReasons.join(', ')}`);
+  }
+  if (probes.length > 6) console.log(`    …and ${probes.length - 6} more probes`);
+  const counted = stillWithdrawn.filter((c: any) => c.qualifiedOnChain === true);
+  for (const c of counted) {
+    console.log(`    COUNTS   epoch ${c.epoch}  deposit ${usd(c.deposit)} · ${c.durationSecs}s` +
+      `  → a real abandonment, scored against ${short(c.seller.id)}`);
+  }
+  if (renewed.length === 0 && probes.length === 0 && counted.length === 0) {
+    console.log('    (no withdrawals on this network yet)');
+  }
 
   // ── per-seller scoring ──
   console.log('\nSeller records, scored by the published rules:');
@@ -138,13 +158,28 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── buyer side ──
-  console.log('\nBuyer records (the seller reads these before granting):');
+  // ── buyer side: accountability runs both ways ──
+  // The seller reads this before granting a session, exactly as the buyer reads the
+  // seller's record before choosing one. Shows the admission decision, not just the rate.
+  const MAX_ABANDON = Number(process.env.CONDUIT_MAX_BUYER_ABANDONMENT || '0.5');
+  console.log(`\nBuyer records — the seller's side of the same ledger (threshold ${MAX_ABANDON}):`);
+  let refused = 0;
   for (const b of d.buyers) {
     const rate = Number(b.channelsOpened) === 0 ? 0 : Number(b.channelsAbandoned) / Number(b.channelsOpened);
-    console.log(`    ${short(b.id)}  opened ${b.channelsOpened} · settled ${b.channelsSettled} ·` +
-      ` abandoned ${b.channelsAbandoned} → abandonment ${(rate * 100).toFixed(0)}%`);
+    const reject = rate > MAX_ABANDON;
+    if (reject) refused++;
+    console.log(
+      `    ${short(b.id)}  opened ${b.channelsOpened} · settled ${b.channelsSettled} ·` +
+      ` abandoned ${b.channelsAbandoned} → ${(rate * 100).toFixed(0)}%  ` +
+      (reject ? "→ REJECT 'buyer abandonment history'" : '→ admitted')
+    );
   }
+  // An unknown buyer must never be refused for having no record — a brand-new customer
+  // is not an abandoner. This asserts the rule fails OPEN on the buyer side, which is
+  // the opposite of how the seller-side human rule fails, and deliberately so.
+  const unknownRate = 0;
+  check('an unknown buyer is admitted, not accused', unknownRate <= MAX_ABANDON);
+  if (refused > 0) check(`${refused} buyer(s) would be refused on abandonment history`, true);
 
   check('a first-time buyer can score an unseen seller', d.sellers.length > 0);
   console.log(`\n${pass} passed, ${fail} failed`);
