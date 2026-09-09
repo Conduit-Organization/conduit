@@ -35,6 +35,56 @@ Source: `contracts/deployed.sepolia.json`, in-repo since June 2026.
 `contracts/contracts/ConduitEscrow.sol` is **not modified** during this event. Its
 Sepolia settlement history is the data the new reputation work reads.
 
+### Deployment and real event history — verified 2026-09-09
+
+| Fact | Value | Level |
+|---|---|---|
+| deploy block | **`11014017`** | **CHAIN** (Blockscout `getcontractcreation`) |
+| deployed at | 2026-06-08T07:44:48Z | **CHAIN** |
+| creation tx | `0x075960a2bd16991e5d70b273cfdb8e7d52573334e70ef8d8a715c0be621e88b8` | **CHAIN** |
+| creator | `0xE74686Fd89ACB480B3903724C367395d86ED4519` — matches `deployedBy` | **CHAIN** |
+
+`11014017` is the subgraph `startBlock`. The deploy date sits inside the original
+June–July build window, as expected.
+
+**Complete event history (10 events, 3 sellers):**
+
+| Event | Count |
+|---|---|
+| `ChannelOpened` | 6 |
+| `Withdrawn` | 2 |
+| `Settled` | 1 |
+| `Claimed` | 1 |
+
+> ⚠️ **Do not derive a `startBlock` by binary-searching `eth_getCode`.** The default
+> public Sepolia RPC is not an archive node: it errors on historical state, which a
+> naive search reads as "no code" and drives the answer ~640k blocks too high. Use the
+> explorer's contract-creation endpoint.
+
+### The finding that reshaped the qualification rules
+
+**Both `Withdrawn` events ConduitEscrow has ever emitted are session renewals, not
+abandonment.** Each is followed **24 seconds later** by the *same* buyer reopening with
+the *same* seller at the next epoch:
+
+| Withdrawn | Reopened | Gap | Epoch |
+|---|---|---|---|
+| block `11102985` (2026-06-20T17:40:12Z) | block `11102987` (17:40:36Z) | 24s | 1 → 2 |
+| block `11109678` (2026-06-21T16:01:24Z) | block `11109680` (16:01:48Z) | 24s | 2 → 3 |
+
+That is `src/buy/storefront.ts:244-253` behaving exactly as documented — an expired
+channel cannot be reopened over, so the client reclaims the remainder and opens a fresh
+one. **100% of our real adverse-signal history is a loyal returning customer.**
+
+A naive `settled / (settled + withdrawn)` counter scores seller
+`0x315f556c9d9b88892f6ea71efea0aacde4fa5e12` at **0.0** — the worst value the scale can
+produce — for the crime of retaining a repeat customer. This is a stronger argument than
+the sybil PoC because it is **not hypothetical**: it is already on-chain, it is our own
+client's normal behaviour, and a judge can check it on Etherscan in under a minute.
+
+Hence `QUALIFICATION.MAX_RENEWAL_GAP_SECS` — a fifth rule the build spec did not
+anticipate. See `src/core/qualification.ts`.
+
 ---
 
 ## 2. Arc testnet (Circle)
@@ -251,3 +301,4 @@ Recorded because the spec asked to be told when reality disagreed with it.
 | 6 | Video is a hard 4:00 cap | Also a hard **2:00 minimum** | New constraint |
 | 7 | Calendar labels Day 0 as "Wednesday Sep 10" | **Sep 9 is the Wednesday**; Sep 13 is the Sunday | Day 0 is 2026-09-09; one more day than the labels imply |
 | 8 | World gate = "is this a verified human" (boolean) | `lookupHuman` returns a **stable anonymous human id** | Enables counting unique *humans*, not just verified wallets — strictly stronger |
+| 9 | §2.5.5 lists four qualification rules | A **fifth is required**: both real `Withdrawn` events on Sepolia are 24-second session renewals by a returning customer, not abandonment | Without it the naive counter scores a seller 0.0 for customer loyalty — a real, already-on-chain failure, not a hypothetical attack |

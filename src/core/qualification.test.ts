@@ -34,6 +34,7 @@ const GENUINE: ChannelFacts = {
   durationSecs: 3600,
   depositBaseUnits: 1_000_000n,
   buyerSettledCount: 3,
+  secondsUntilBuyerReopened: null, // never came back — a real abandonment
   buyerIsVerifiedHuman: true,
 };
 
@@ -47,6 +48,9 @@ describe('qualifyAdverseSignal', () => {
       'deposit-too-small',
       'duration-too-short',
     ]);
+    // The renewal rule does NOT fire — the attacker never came back. The other four
+    // are what stop it.
+    assert.ok(!r.reasons.includes('withdrawal-is-a-renewal'));
   });
 
   test('accepts a genuine abandoned session', () => {
@@ -61,6 +65,7 @@ describe('qualifyAdverseSignal', () => {
       [{ depositBaseUnits: QUALIFICATION.MIN_DEPOSIT_BASE_UNITS - 1n }, 'deposit-too-small'],
       [{ buyerSettledCount: 0 }, 'buyer-has-no-settlement-history'],
       [{ buyerIsVerifiedHuman: false }, 'buyer-not-human-verified'],
+      [{ secondsUntilBuyerReopened: 24 }, 'withdrawal-is-a-renewal'],
     ];
     for (const [override, reason] of cases) {
       const r = qualifyAdverseSignal({ ...GENUINE, ...override });
@@ -96,6 +101,67 @@ describe('qualifyAdverseSignal', () => {
   });
 });
 
+describe('the renewal rule, against Conduit real Sepolia history', () => {
+  // Every `Withdrawn` event ConduitEscrow has EVER emitted on Sepolia
+  // (0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7, deployed at block 11014017).
+  // Both are followed 24 seconds later by the SAME buyer reopening with the SAME
+  // seller at the next epoch — storefront.ts:244-253 reclaiming an expired channel.
+  const REAL_WITHDRAWALS = [
+    { block: 11102985, reopenedAtBlock: 11102987, gapSecs: 24, epochBefore: 1, epochAfter: 2 },
+    { block: 11109678, reopenedAtBlock: 11109680, gapSecs: 24, epochBefore: 2, epochAfter: 3 },
+  ];
+
+  test('classifies 100% of real historical withdrawals as renewals, not abandonment', () => {
+    for (const w of REAL_WITHDRAWALS) {
+      const r = qualifyAdverseSignal({
+        durationSecs: 86_400,
+        depositBaseUnits: 50_000n, // the real deposit: 0.05 USD₮
+        buyerSettledCount: 1,
+        secondsUntilBuyerReopened: w.gapSecs,
+        buyerIsVerifiedHuman: true,
+      });
+      assert.equal(r.qualified, false, `block ${w.block} must not count against the seller`);
+      assert.deepEqual(r.reasons, ['withdrawal-is-a-renewal']);
+      assert.equal(w.epochAfter, w.epochBefore + 1, 'reopen bumps the epoch');
+    }
+  });
+
+  test('a naive counter would score that seller 0.0 for having a repeat customer', () => {
+    // Seller 0x315f556c9d9b88892f6ea71efea0aacde4fa5e12: two Withdrawn, zero Settled.
+    const naive = 0 / (0 + REAL_WITHDRAWALS.length);
+    assert.equal(naive, 0, 'the worst score the scale can produce');
+
+    // Hardened: both reclassified as renewals, so the seller has no history at all
+    // and lands on the neutral baseline rather than being destroyed.
+    const hardened: GlobalRecord = {
+      settled: 0,
+      qualifiedWithdrawn: 0,
+      probeChannels: 0,
+      renewals: REAL_WITHDRAWALS.length,
+      uniqueVerifiedBuyers: 0,
+      totalClaimed: 0n,
+    };
+    assert.equal(globalScore(hardened), NEUTRAL_SCORE);
+  });
+
+  test('does not fire when the buyer genuinely never came back', () => {
+    assert.equal(qualifyAdverseSignal({ ...GENUINE, secondsUntilBuyerReopened: null }).qualified, true);
+    assert.equal(qualifyAdverseSignal({ ...GENUINE, secondsUntilBuyerReopened: undefined }).qualified, true);
+  });
+
+  test('does not fire for a return long after the fact', () => {
+    const r = qualifyAdverseSignal({
+      ...GENUINE,
+      secondsUntilBuyerReopened: QUALIFICATION.MAX_RENEWAL_GAP_SECS + 1,
+    });
+    assert.equal(r.qualified, true, 'coming back a week later is not a renewal of that session');
+  });
+
+  test('the window is wide enough for the observed gap, by a large margin', () => {
+    assert.ok(QUALIFICATION.MAX_RENEWAL_GAP_SECS >= 24 * 10);
+  });
+});
+
 describe('qualifyOnChainOnly (what a subgraph can decide by itself)', () => {
   test('rejects the forged channel without needing the cross-chain identity read', () => {
     const { buyerIsVerifiedHuman, ...onChain } = FORGED;
@@ -118,6 +184,7 @@ describe('scoring', () => {
     settled: 0,
     qualifiedWithdrawn: 0,
     probeChannels: 0,
+    renewals: 0,
     uniqueVerifiedBuyers: 0,
     totalClaimed: 0n,
   };
@@ -144,6 +211,7 @@ describe('scoring', () => {
       settled: 1,
       qualifiedWithdrawn: 0, // all five failed qualification
       probeChannels: 5, // still indexed, still visible, not scoring
+      renewals: 0,
       uniqueVerifiedBuyers: 1,
       totalClaimed: 500_000n,
     };
@@ -157,6 +225,7 @@ describe('scoring', () => {
       settled: 1,
       qualifiedWithdrawn: 1,
       probeChannels: 0,
+      renewals: 0,
       uniqueVerifiedBuyers: 2,
       totalClaimed: 500_000n,
     };
@@ -181,8 +250,8 @@ describe('scoring', () => {
   test('score stays inside [0,1] across the corners', () => {
     const corners: GlobalRecord[] = [
       NO_HISTORY,
-      { settled: 0, qualifiedWithdrawn: 9, probeChannels: 0, uniqueVerifiedBuyers: 0, totalClaimed: 0n },
-      { settled: 9, qualifiedWithdrawn: 0, probeChannels: 0, uniqueVerifiedBuyers: 99, totalClaimed: 10n ** 12n },
+      { settled: 0, qualifiedWithdrawn: 9, probeChannels: 0, renewals: 0, uniqueVerifiedBuyers: 0, totalClaimed: 0n },
+      { settled: 9, qualifiedWithdrawn: 0, probeChannels: 0, renewals: 0, uniqueVerifiedBuyers: 99, totalClaimed: 10n ** 12n },
     ];
     for (const c of corners) {
       const s = globalScore(c);

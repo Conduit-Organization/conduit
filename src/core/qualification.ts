@@ -64,6 +64,25 @@ export const QUALIFICATION = Object.freeze({
    */
   REQUIRE_VERIFIED_BUYER: true,
 
+  /**
+   * A `Withdrawn` followed within this many seconds by the SAME buyer reopening a
+   * channel with the SAME seller is a session RENEWAL, not an abandonment.
+   *
+   * This rule is not defensive theory — it is the whole of Conduit's real on-chain
+   * history. Both `Withdrawn` events ever emitted by the Sepolia escrow
+   * (blocks 11102985 and 11109678) are followed 24 seconds later by the same buyer
+   * reopening with the same seller at the next epoch. That is `storefront.ts:244-253`
+   * doing exactly what it says: an expired channel cannot be reopened over, so the
+   * client reclaims the remainder and opens a fresh one.
+   *
+   * A naive `Withdrawn` counter would therefore score that seller 0.0 — the worst
+   * possible reliability — for having a LOYAL RETURNING CUSTOMER who renewed twice.
+   *
+   * 300s is 12x the observed 24s gap: wide enough for a congested block, far below
+   * any plausible "gave up and came back later".
+   */
+  MAX_RENEWAL_GAP_SECS: 300,
+
   /** Unique verified buyers at which `breadth` saturates. One buyer is not a record. */
   BREADTH_SATURATION: 5,
 
@@ -85,7 +104,8 @@ export type DisqualificationReason =
   | 'duration-too-short'
   | 'deposit-too-small'
   | 'buyer-has-no-settlement-history'
-  | 'buyer-not-human-verified';
+  | 'buyer-not-human-verified'
+  | 'withdrawal-is-a-renewal';
 
 /** Everything needed to judge whether one closed channel is a usable adverse signal. */
 export interface ChannelFacts {
@@ -95,6 +115,12 @@ export interface ChannelFacts {
   depositBaseUnits: bigint;
   /** How many channels this buyer has settled, with any seller, ever. */
   buyerSettledCount: number;
+  /**
+   * Seconds between this channel's `Withdrawn` and the same buyer reopening with the
+   * same seller, or `null` if they never came back. A small gap means renewal, not
+   * abandonment — see `QUALIFICATION.MAX_RENEWAL_GAP_SECS`.
+   */
+  secondsUntilBuyerReopened?: number | null;
   /**
    * Whether the buyer resolves to a World-verified unique human. `undefined` means
    * "not yet checked" and is treated as unverified — fail closed.
@@ -137,6 +163,15 @@ function evaluate(f: Omit<ChannelFacts, 'buyerIsVerifiedHuman'> & Partial<Channe
   if (f.durationSecs < QUALIFICATION.MIN_DURATION_SECS) reasons.push('duration-too-short');
   if (f.depositBaseUnits < QUALIFICATION.MIN_DEPOSIT_BASE_UNITS) reasons.push('deposit-too-small');
   if (f.buyerSettledCount < QUALIFICATION.MIN_BUYER_SETTLEMENTS) reasons.push('buyer-has-no-settlement-history');
+  // The buyer came straight back to the same seller: this was a session renewal, and
+  // renewals are evidence of satisfaction, not abandonment.
+  if (
+    f.secondsUntilBuyerReopened != null &&
+    f.secondsUntilBuyerReopened >= 0 &&
+    f.secondsUntilBuyerReopened <= QUALIFICATION.MAX_RENEWAL_GAP_SECS
+  ) {
+    reasons.push('withdrawal-is-a-renewal');
+  }
   // Fail closed: an unchecked buyer (`undefined`) is treated exactly like an
   // unverified one, so forgetting to run the lookup can never grant qualification.
   if (includeIdentityRule && QUALIFICATION.REQUIRE_VERIFIED_BUYER && !f.buyerIsVerifiedHuman) {
@@ -154,6 +189,12 @@ export interface GlobalRecord {
   qualifiedWithdrawn: number;
   /** Channels withdrawn that FAILED qualification — visible, but not scoring. */
   probeChannels: number;
+  /**
+   * Withdrawals that were session renewals (buyer reopened immediately). Counted
+   * separately from probes because they are a POSITIVE signal wearing an adverse
+   * event's clothing — a customer who renewed is a customer who came back.
+   */
+  renewals: number;
   /** Distinct World-verified humans who have opened a channel with this seller. */
   uniqueVerifiedBuyers: number;
   /** Base units actually claimed by this seller across all channels. */
