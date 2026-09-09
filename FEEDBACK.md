@@ -88,7 +88,39 @@ silently deny service during an RPC outage.
 this section covers the access flow rather than in-app behaviour, and we will extend it
 once we are in.
 
-The access flow itself has friction worth reporting:
+**Blocking bug we hit: the iOS enrollment form cannot be submitted.** On the
+**Install World ID Sandbox → iOS** panel, entering an Apple Account email and pressing
+**Submit email** does nothing — the button is inert, with no error, no toast and no
+validation message.
+
+The cause appears to be the sentence rendered directly above the field:
+
+> *"An email-based portal account is required to request iOS enrollment."*
+
+Our Developer Portal account was not created with an email credential, so there is
+nothing for the form to attach the request to. But the page still renders an enabled-
+looking button and an editable field, and gives no feedback when the requirement is not
+met. From the developer's side this is indistinguishable from a broken page — we spent
+time checking browsers and ad-blockers before suspecting the account type.
+
+Three small fixes would remove this entirely:
+
+1. **Disable the button visibly** when the portal account has no email, instead of
+   letting it look actionable.
+2. **Say what to do next.** "Your portal account has no email credential — add one in
+   account settings to request iOS enrollment" is one sentence and completely unblocks
+   the developer.
+3. **Link the remedy** directly from that message. There is currently no documented page
+   explaining portal account types, or how to add an email to an account created via
+   World ID / wallet sign-in — we could not find one anywhere in the docs.
+
+Worth noting the asymmetry: **the Android tab has no equivalent requirement.** It accepts
+any Google account email. So the same developer is blocked on one platform and not the
+other, for a reason that is never stated as a platform difference. If the email-based
+account requirement is iOS-only because of how TestFlight enrollment works, saying so
+would make it obvious rather than mysterious.
+
+The access flow itself has further friction worth reporting:
 
 - **Access is gated with no published SLA**, which is hard to plan a four-day hackathon
   around when a prize track requires using it. Even a rough expected turnaround on the
@@ -103,6 +135,11 @@ The access flow itself has friction worth reporting:
 - The Android instructions correctly warn that the browser and Play Store must use the same
   account — this is good, specific, hard-won documentation and more sections should read
   like it.
+- **The docs and the portal UI disagree about what is required.**
+  `docs.world.org/world-id/sandbox/sandbox-access` describes the iOS path as "install
+  TestFlight, submit your Apple Account email, wait for approval" and never mentions the
+  email-based portal account prerequisite that the portal itself enforces. A developer
+  following the documentation cannot complete the documented flow.
 
 **A genuine gap:** because verification is a `view` call, our *seller* side needs no
 Sandbox at all — we tested the entire refusal ladder against live World Chain with
