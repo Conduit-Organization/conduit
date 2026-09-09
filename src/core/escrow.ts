@@ -116,16 +116,27 @@ export function offchainVoucherDigest(domain: any, buyer: string, seller: string
   return TypedDataEncoder.hash(domain, VOUCHER_TYPES as any, { buyer, seller, epoch, cumulativeAmount: cumulative });
 }
 
-// Resolve the deployed escrow address: env override, else contracts/deployed.sepolia.json.
-export function loadEscrowDeployment(): { address: string; chainId: number } | null {
+// Resolve the deployed escrow address: env override, else the deployment record for the
+// selected network.
+//
+// ETHOnline 2026: resolves `contracts/deployed.<network>.json` rather than always
+// Sepolia, so `CONDUIT_NETWORK=arc-testnet` picks up the Arc deployment. Sepolia remains
+// the default and the fallback, so no existing setup changes behaviour.
+export function loadEscrowDeployment(networkName?: string): { address: string; chainId: number } | null {
   if (process.env.CONDUIT_ESCROW_ADDRESS) {
     return { address: process.env.CONDUIT_ESCROW_ADDRESS, chainId: Number(process.env.CONDUIT_CHAIN_ID || '11155111') };
   }
-  try {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const j = JSON.parse(readFileSync(path.join(here, '../../contracts/deployed.sepolia.json'), 'utf8'));
-    return { address: j.escrow, chainId: Number(j.chainId) };
-  } catch {
-    return null;
+  const name = networkName || process.env.CONDUIT_NETWORK || 'sepolia';
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  // Try the selected network, then fall back to Sepolia — a missing Arc deployment must
+  // not leave a buyer with no escrow at all.
+  for (const candidate of [name, 'sepolia']) {
+    try {
+      const j = JSON.parse(readFileSync(path.join(here, `../../contracts/deployed.${candidate}.json`), 'utf8'));
+      if (j?.escrow) return { address: j.escrow, chainId: Number(j.chainId) };
+    } catch {
+      /* try the next candidate */
+    }
   }
+  return null;
 }
