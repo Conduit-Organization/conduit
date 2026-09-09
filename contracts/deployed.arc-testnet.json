@@ -1,0 +1,9 @@
+{
+  "chainId": 5042002,
+  "network": "arc-testnet",
+  "escrow": "0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2",
+  "token": "0x3600000000000000000000000000000000000000",
+  "deployedBy": "0x73A5021c0935b79D46C2D650821b212dC5b3b9Eb",
+  "deployedAt": "2026-09-09T09:35:21.770Z",
+  "deployTx": "0x0898385bae4f47a19d0ab99afc90420af302b33c5ced0ccbe7261a20db68d9af"
+}

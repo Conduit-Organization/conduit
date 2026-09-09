@@ -4,5 +4,11 @@
       "address": "0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7",
       "startBlock": 11014017
     }
+  },
+  "arc-testnet": {
+    "ConduitEscrow": {
+      "address": "0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2",
+      "startBlock": 61217992
+    }
   }
 }

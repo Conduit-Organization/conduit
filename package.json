@@ -26,6 +26,7 @@
     "escrow-demo": "tsx src/scripts/escrow-demo.ts",
     "humanity-check": "tsx src/scripts/humanity-check.ts",
     "graph-check": "tsx src/scripts/graph-check.ts",
+    "arc-e2e": "tsx src/scripts/arc-e2e.ts",
     "web": "tsx src/web/server.ts",
     "app:install": "npm --prefix app install",
     "app:dev": "npm --prefix app run dev",

@@ -82,7 +82,7 @@ export const ARC_TESTNET: NetworkProfile = {
   settlementSymbol: 'USDC',
   decimals: 6,
   explorer: 'https://testnet.arcscan.app',
-  escrow: null, // set once ConduitEscrow is deployed; see contracts/deployed.arc-testnet.json
+  escrow: '0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2', // deployed 2026-09-09, block 61217992
   faucet: 'https://faucet.circle.com',
   gasIsSettlementToken: true, // USDC is the gas token — revenue and costs in one unit
   testnet: true,
