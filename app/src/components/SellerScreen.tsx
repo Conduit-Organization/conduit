@@ -20,11 +20,14 @@ export default function SellerScreen({
 }: {
   status: SellerStatus | null;
   busy: boolean;
-  onStart: (model?: string) => void;
+  onStart: (model?: string, requireHuman?: boolean) => void;
   onStop: () => void;
 }) {
   const [profile, setProfile] = useState<SellerProfile | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  // Seller POLICY, not a product rule: some sellers will sell to any funded keypair,
+  // some only to verified humans. Off by default — turning it on is a choice.
+  const [requireHuman, setRequireHuman] = useState(false);
   useEffect(() => {
     let live = true;
     void getSellerProfile().then((p) => {
@@ -37,6 +40,8 @@ export default function SellerScreen({
 
   const running = !!status?.running;
   const online = !!status?.online;
+  // While running, show what the child was actually started with, not the pending toggle.
+  const humanGate = running ? !!status?.requireHuman : requireHuman;
 
   // When running, reflect the live offer; otherwise reflect the seller's current selection.
   const sel = profile?.models.find((m) => m.id === chosen) ?? null;
@@ -118,6 +123,43 @@ export default function SellerScreen({
           </div>
         )}
 
+        {/* ETHOnline 2026 — who you sell to is YOUR policy, not the product's. Some
+            sellers will take any funded keypair; some only want verified humans. */}
+        <div className={`sg-gate${humanGate ? ' on' : ''}`}>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={humanGate}
+            className={`sg-switch${humanGate ? ' on' : ''}`}
+            onClick={() => !running && setRequireHuman((v) => !v)}
+            disabled={running}
+            title={running ? 'Go offline to change this policy' : undefined}
+          >
+            <i />
+          </button>
+          <div className="sg-gate-copy">
+            <div className="sg-gate-title">
+              Only sell to verified humans
+              {running && <span className="sg-locked">· locked while online</span>}
+            </div>
+            <p>
+              {humanGate ? (
+                <>
+                  A buyer must prove a <b>unique human</b> is behind their wallet before you grant
+                  a session. Payment alone is not enough — an unverified buyer with a fully funded
+                  channel is refused.
+                </>
+              ) : (
+                <>
+                  Any buyer with a funded channel is served. One actor can appear as many
+                  customers, so you cannot rate-limit or ban anyone — a banned address returns as
+                  a new one.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+
         <div className="seller-go">
           <div className="sg-state">
             <i className={`dot ${dotClass}`} />
@@ -128,7 +170,11 @@ export default function SellerScreen({
               {busy ? 'Stopping…' : 'Go offline'}
             </button>
           ) : (
-            <button className="gate-btn primary" onClick={() => onStart(chosen ?? undefined)} disabled={busy || !chosen}>
+            <button
+              className="gate-btn primary"
+              onClick={() => onStart(chosen ?? undefined, requireHuman)}
+              disabled={busy || !chosen}
+            >
               {busy ? 'Starting…' : `Go online${sel ? ` with ${modelName(sel.id)}` : ''}`}
             </button>
           )}

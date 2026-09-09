@@ -19,6 +19,13 @@ export interface SellerStatus {
   earned: string | null; // on-chain USD₮ delta since going online (base-units), best-effort
   startedAt: number | null;
   error: string | null;
+  /**
+   * ETHOnline 2026 — seller POLICY: refuse sessions from wallets that are not backed by
+   * a World-verified unique human. Off by default, so a seller sells to any funded
+   * keypair exactly as before. The choice is the seller's, which is what makes this a
+   * market rather than a rule imposed on everyone.
+   */
+  requireHuman: boolean;
 }
 
 export interface SellerManagerDeps {
@@ -32,7 +39,7 @@ export interface SellerManagerDeps {
 }
 
 export interface SellerManager {
-  start(mnemonic: string, model?: string): Promise<SellerStatus>;
+  start(mnemonic: string, model?: string, opts?: { requireHuman?: boolean }): Promise<SellerStatus>;
   stop(): Promise<void>;
   status(): SellerStatus;
 }
@@ -64,7 +71,7 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
 
   const st: SellerStatus = {
     running: false, online: false, model: null, price: null, tps: null,
-    address: null, requestsServed: 0, earned: null, startedAt: null, error: null,
+    address: null, requestsServed: 0, earned: null, startedAt: null, error: null, requireHuman: false,
   };
 
   function reset() {
@@ -124,10 +131,11 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
     }
   }
 
-  async function start(mnemonic: string, model?: string): Promise<SellerStatus> {
+  async function start(mnemonic: string, model?: string, opts?: { requireHuman?: boolean }): Promise<SellerStatus> {
     if (child) return st; // already running
     reset();
     st.error = null;
+    st.requireHuman = !!opts?.requireHuman;
     const spec = sellerSpawnSpec(deps.repoRoot);
     log(`[seller-mgr] starting: ${spec.command} ${spec.args.join(' ')}${model ? ` (model ${model})` : ''}`);
 
@@ -148,6 +156,9 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
         ...process.env,
         CONDUIT_SELLER_MNEMONIC: mnemonic,
         ...(model ? { CONDUIT_SELLER_MODEL: model } : {}), // seller's chosen model (else sell.ts uses topSellable)
+        // sell.ts reads this at module load, and the child is freshly spawned each start,
+        // so toggling the policy takes effect on the next "go online".
+        CONDUIT_REQUIRE_HUMAN: opts?.requireHuman ? '1' : '0',
         ...(process.env.CONDUIT_SELLER_ENTRY ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
         QVAC_HYPERSWARM_SEED: '', // let sell.ts pick its own provider identity (don't inherit the buyer's)
       },

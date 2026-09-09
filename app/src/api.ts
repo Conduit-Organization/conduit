@@ -116,6 +116,8 @@ export interface SellerStatus {
   earned: string | null; // base-units, on-chain delta since going online
   startedAt: number | null;
   error: string | null;
+  /** ETHOnline 2026 — this seller only admits World-verified humans. Seller policy. */
+  requireHuman?: boolean;
 }
 
 export interface SellerOfferProfile {
@@ -191,8 +193,8 @@ export async function getSellerProfile(): Promise<SellerProfile> {
   if (!r.ok) throw new Error(`seller profile ${r.status}`);
   return r.json();
 }
-export async function startSeller(model?: string): Promise<SellerStatus> {
-  return postJson('/api/seller/start', model ? { model } : {});
+export async function startSeller(model?: string, requireHuman?: boolean): Promise<SellerStatus> {
+  return postJson('/api/seller/start', { ...(model ? { model } : {}), requireHuman: !!requireHuman });
 }
 export async function stopSeller(): Promise<void> {
   await postJson('/api/seller/stop', {});

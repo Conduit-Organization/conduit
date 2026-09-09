@@ -405,8 +405,10 @@ const server = http.createServer((req, res) => {
     }
     if (req.method === 'POST' && p === '/api/seller/start') {
       if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
-      const { model } = await readBody(req); // optional: the seller's chosen model (else the prober's pick)
-      try { json(res, 200, await seller.start(wallet.mnemonic, typeof model === 'string' ? model : undefined)); }
+      // `model` optional: the seller's chosen model (else the prober's pick).
+      // `requireHuman` is seller policy — refuse buyers not backed by a verified human.
+      const { model, requireHuman } = await readBody(req);
+      try { json(res, 200, await seller.start(wallet.mnemonic, typeof model === 'string' ? model : undefined, { requireHuman: !!requireHuman })); }
       catch (e: any) { json(res, 500, { error: String(e?.message ?? e) }); }
       return;
     }
