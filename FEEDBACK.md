@@ -103,6 +103,16 @@ looking button and an editable field, and gives no feedback when the requirement
 met. From the developer's side this is indistinguishable from a broken page — we spent
 time checking browsers and ad-blockers before suspecting the account type.
 
+**The deeper problem is that the panel conflates two different accounts.** The sentence
+about the **portal** account is rendered immediately above a field whose placeholder is
+`apple-account@example.com`. Those are different accounts with different purposes, and
+nothing on the page distinguishes them. Our first assumption — and we suspect most
+developers' — was that the requirement referred to the Apple Account being email-based,
+which it already was. The real blocker was the portal sign-in method (World ID / wallet),
+which is never mentioned. Labelling the field "Apple Account email" and the requirement
+"your World Developer Portal account must have an email credential" would remove the
+ambiguity outright.
+
 Three small fixes would remove this entirely:
 
 1. **Disable the button visibly** when the portal account has no email, instead of
