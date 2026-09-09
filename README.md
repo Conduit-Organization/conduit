@@ -28,6 +28,7 @@ wire; **the cloud sees nothing**. Every model runs fully on-device through the *
 
 ## Contents
 
+- [ETHOnline 2026 — what is new](#ethonline-2026--what-is-new)
 - [How it works](#how-it-works)
 - [Demo hardware](#demo-hardware)
 - [Prerequisites](#prerequisites)
@@ -43,6 +44,138 @@ wire; **the cloud sees nothing**. Every model runs fully on-device through the *
 - [Reproducing the demo](#reproducing-the-demo)
 - [Repository layout](#repository-layout)
 - [License](#license)
+
+---
+
+## ETHOnline 2026 — what is new
+
+> **Judging this project?** Everything below the next heading predates this event and is
+> **not** submitted as hackathon work. The boundary is one command:
+>
+> ```bash
+> git diff pre-ethonline..HEAD --stat
+> ```
+>
+> Full disclosure in [`CONTINUITY.md`](./CONTINUITY.md).
+
+Conduit already sold GPU inference between peers with no server in the middle. What it
+could not do was tell you **who was on the other end** — of either side.
+
+**A seller's admission test was six checks, and all six were about money.** Is there a
+channel, is the deposit big enough, has it expired, does the epoch match
+(`src/node/sell.ts:146-159`). Nothing asked who the buyer was. A buyer is an address, and
+addresses are free — so one actor can be a thousand customers, and a seller cannot
+rate-limit, price-discriminate or ban anyone, because the banned party returns as a fresh
+address in one line of code.
+
+**And a buyer could not see a seller at all.** Reputation was first-party only — a JSON
+file on one laptop — so every seller you had not personally met scored a flat `0.5`
+(`src/core/reputation.ts:6,54,60`, a TODO we wrote ourselves in June).
+
+The new work closes both, in one mechanism:
+
+> **A human-backed agent buys GPU capacity from another agent, and personhood is what
+> makes the settlement record worth reading.**
+>
+> **World** makes identities scarce · **The Graph** makes the history readable ·
+> **Arc** makes producing that history cheap enough to be worth doing.
+
+### The vulnerability we found in our own design
+
+The obvious way to score a seller is `settled / (settled + withdrawn)` — a buyer who had
+to claw their deposit back is a seller who vanished. **That reading is wrong twice over,
+and we can prove both.**
+
+**1. `Withdrawn` is forgeable for gas.** `ConduitEscrow.open()` bounds only `amount > 0`
+and `duration > 0`, so anyone can open a 1-second channel against **any address** for one
+base unit and withdraw it in the next block, deposit returned in full. Measured at
+**212,331 gas per forged identity, zero capital at risk**. Five throwaway wallets take an
+honest seller from 100% to 16.7%. The victim never transacts and need not even be a
+seller. Proof: [`contracts/test/sybil-grief.test.ts`](./contracts/test/sybil-grief.test.ts).
+
+**2. Every real `Withdrawn` in our history is a renewal, not an abandonment.** Both events
+`ConduitEscrow` has ever emitted on Sepolia are followed **24 seconds later** by the same
+buyer reopening with the same seller at the next epoch — `src/buy/storefront.ts:244-253`
+reclaiming an expired channel. A naive counter scores that seller **0.0**, the worst value
+on the scale, for retaining a loyal customer. Check it yourself:
+[block 11102985](https://sepolia.etherscan.io/block/11102985) → [11102987](https://sepolia.etherscan.io/block/11102987).
+
+`ConduitEscrow` is **not** at fault — funds are never at risk, and `withdraw()` does
+exactly what its docstring promises. The defect is in *deriving reputation from the
+event*, which is the new work. So the naive counter is never shipped, not even briefly.
+
+### The qualification rules — published so you can audit them
+
+A `Withdrawn` counts against a seller only if **all five** hold
+([`src/core/qualification.ts`](./src/core/qualification.ts)):
+
+| Rule | Threshold | Why |
+|---|---|---|
+| Channel duration | ≥ **600s** | A 1-second channel cannot evidence a failure to deliver |
+| Deposit | ≥ **20,000** base units (0.02 USD₮) | 10× the cheapest advertised tier — a session, not a probe |
+| Buyer settlements | ≥ **1** with any seller | A wallet that never paid for anything is not a wronged customer |
+| Not a renewal | reopen gap > **300s** | The buyer came straight back — that is satisfaction, not a complaint |
+| Buyer is World-verified | AgentBook `lookupHuman ≠ 0` | The identity has to have cost something |
+
+Failing any of these does **not** hide the event — it is still indexed and queryable as
+`probeChannels` or `renewals`, with its `disqualificationReasons`. The filtering is
+auditable, not implicit.
+
+```
+reliability = settled / (settled + qualifiedWithdrawn)       // 0.5 when n = 0
+breadth     = min(1, uniqueVerifiedHumans / 5)               // humans, not addresses
+volume      = min(1, totalClaimed / 1_000_000)               // 1.0 USD₮ (6 dec)
+globalScore = 0.65*reliability + 0.20*breadth + 0.15*volume
+```
+
+Global history is **blended with**, never substituted for, your own experience:
+`w_local = n / (n + 5)`. First-party evidence is strictly better when you have it; the
+global signal only fills the cold-start hole.
+
+### Why the human gate is load-bearing, not a login
+
+`AgentBook.lookupHuman(address)` returns a **stable anonymous human identifier**, not a
+boolean. So N wallets backed by the same person collapse to **one** — which is precisely
+what makes `breadth` uncheatable and the sybil attack above unaffordable. It is a plain
+`view` call, so the check sits *inside* the P2P session grant as a peer of the economic
+checks rather than wrapping them.
+
+Payment and personhood stay **independent**: a verified human with no funded channel is
+still refused `no open channel`; a funded channel with no proof is refused
+`unverified human`. And `requireHuman` is **seller policy** — some sellers sell to any
+funded keypair, some only to humans. That is a market, not a rule.
+
+### Cost to forge a seller's reputation
+
+|  | Cost |
+|---|---|
+| Without the human gate | N × gas — **cents**, deposit refunded in full |
+| With the human gate | N × World-verified humans — **not purchasable at any gas price** |
+
+The first number is measured from real transactions we ran, not estimated. The second is a
+property of World ID, not a claim of ours.
+
+### New in this event
+
+| Area | Files |
+|---|---|
+| Subgraph over `ConduitEscrow` | [`subgraph/`](./subgraph/) |
+| Global seller reputation | `src/core/graph-reputation.ts` |
+| Human gate + AgentBook | `src/core/humanity.ts`, `src/node/sell.ts`, `src/core/protocol.ts` |
+| Qualification rules + sybil PoC | `src/core/qualification.ts`, `contracts/test/sybil-grief.test.ts` |
+| Arc network profile | `src/core/networks.ts`, `contracts/hardhat.config.ts` |
+| Boundary + feedback + verified constants | [`CONTINUITY.md`](./CONTINUITY.md), [`FEEDBACK.md`](./FEEDBACK.md), [`docs/ethonline/VERIFIED-CONSTANTS.md`](./docs/ethonline/VERIFIED-CONSTANTS.md) |
+
+`contracts/contracts/ConduitEscrow.sol` is **deliberately unmodified**. Redeploying the
+identical source to a second network is a stronger claim than editing it, and it keeps
+every existing voucher, channel and indexed event valid.
+
+```bash
+npm test              # 52 engine tests
+npm run test:contracts # 16 contract tests, incl. the sybil PoC
+npm run humanity-check # live AgentBook reads on World Chain — no key needed
+npm run check:arc      # live Arc testnet connectivity + settlement token
+```
 
 ---
 
