@@ -12,6 +12,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "test:contracts": "npm --prefix contracts test",
     "bench": "tsx src/scripts/bench.ts",
     "slice": "tsx src/scripts/slice.ts",
     "route": "tsx src/scripts/route-test.ts",
