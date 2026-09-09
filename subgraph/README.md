@@ -65,3 +65,19 @@ npm run deploy:sepolia
 
 `npm run codegen` and `npm run build` need no credentials and are the fastest way to check
 this compiles.
+
+## A note on `--network`
+
+`graph build --network <name>` and `graph deploy --network <name>` **rewrite
+`subgraph.yaml` in place**, baking in that network's address and start block and
+stripping the file's comments. That is normal `networks.json` behaviour, not a fault, but
+it means the manifest is dirty after any networked build.
+
+Restore it before committing:
+
+```bash
+git checkout subgraph/subgraph.yaml
+```
+
+The committed manifest always carries the Sepolia defaults; `networks.json` supplies the
+per-network overrides.
