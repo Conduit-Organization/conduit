@@ -73,7 +73,7 @@ retroactively.)*
 | The Graph | `src/core/graph-reputation.ts` — global seller reputation | ✅ built, 19 tests |
 | The Graph | Blended local+global scoring wired at `server.ts:73`/`:146` | ✅ done |
 | The Graph | Buyer-side abandonment check (bilateral accountability) | ✅ in the `sessionOpen` ladder |
-| World | `src/core/humanity.ts` — AgentKit / AgentBook verification | ✅ verified live, 11/11 |
+| World | `src/core/humanity.ts` — AgentKit / AgentBook verification | ✅ **refusal AND acceptance proven live, 16/16** |
 | World | Human-proof gate in the `sessionOpen` reject ladder | ✅ `sell.ts`, seller-side policy |
 | World | `humanProof` on the wire protocol | ✅ `protocol.ts` |
 | World | `FEEDBACK.md` | ✅ written during integration; §3 pending Sandbox access |

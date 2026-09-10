@@ -9,6 +9,12 @@
 // It exercises the seller-side ladder end to end with a freshly generated wallet, which
 // is by construction NOT registered to a human — so the final AgentBook check must fail
 // while every step before it passes. That is the refusal the demo shows on camera.
+//
+// If CONDUIT_DEMO_BUYER_KEY is set to a wallet that HAS been registered in AgentBook
+// (npx @worldcoin/agentkit-cli register <address>), it additionally proves the ACCEPT
+// path — the same code, the same ladder, admitting a real human-backed buyer. The two
+// halves together are the whole claim: the gate refuses everyone it should, and admits
+// exactly one wallet, for a reason that lives on World Chain rather than in our code.
 import { Wallet } from 'ethers';
 import { createHumanity, resourceUriFor, WORLD_CHAIN_ID } from '../core/humanity';
 
@@ -89,6 +95,57 @@ async function main(): Promise<void> {
     !genuine.ok && genuine.reason === 'wallet not registered to a verified human',
     genuine.reason
   );
+
+  // ── the ACCEPT path, when a registered wallet is available ──
+  const demoKey = process.env.CONDUIT_DEMO_BUYER_KEY;
+  if (demoKey) {
+    console.log('\nRegistered buyer (the accept path):');
+    const registered = new Wallet(demoKey.startsWith('0x') ? demoKey : `0x${demoKey}`);
+    const humanIdOf = await humanity.humanId(registered.address);
+    check(
+      'registered wallet resolves to a human in AgentBook',
+      humanIdOf !== null,
+      `${registered.address.slice(0, 12)}… → ${humanIdOf ?? 'null'}`
+    );
+
+    if (humanIdOf) {
+      const realSeller = Wallet.createRandom();
+      const realProof = await humanity.prove(
+        registered.address,
+        realSeller.address,
+        (m) => registered.signMessage(m),
+        { epoch: '1' }
+      );
+      // Order matters. A successful verify CONSUMES the nonce, so the misuse cases are
+      // checked first — otherwise they would all refuse at the replay guard and we would
+      // not learn whether the rule each one targets actually fires.
+      const thief = Wallet.createRandom();
+      const stolenNow = await humanity.verify(realProof, thief.address, realSeller.address);
+      check(
+        'a human-backed proof presented by another wallet is refused',
+        !stolenNow.ok && stolenNow.reason === 'proof address does not match buyer wallet',
+        stolenNow.reason
+      );
+
+      const elsewhere = Wallet.createRandom();
+      const wrongTarget = await humanity.verify(realProof, registered.address, elsewhere.address);
+      check(
+        'a human-backed proof does not open a different seller',
+        !wrongTarget.ok && wrongTarget.reason === 'human proof was issued for a different seller',
+        wrongTarget.reason
+      );
+
+      // Only now the real thing: same ladder, same code, a genuine human-backed buyer.
+      const admitted = await humanity.verify(realProof, registered.address, realSeller.address);
+      check('the same ladder ADMITS a human-backed buyer', admitted.ok, admitted.reason ?? `humanId ${admitted.humanId}`);
+
+      // And the accepted proof is single-use — the nonce it just consumed is now spent.
+      const replay = await humanity.verify(realProof, registered.address, realSeller.address);
+      check('an accepted proof cannot be replayed', !replay.ok, replay.reason);
+    }
+  } else {
+    console.log('\n  (set CONDUIT_DEMO_BUYER_KEY to a registered wallet to also prove the accept path)');
+  }
 
   console.log('\nWhat this proves:');
   console.log('  The signature, freshness, seller-binding and replay checks all PASS for');
