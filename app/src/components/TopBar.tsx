@@ -4,8 +4,12 @@ import { fmt, short } from '../format';
 
 export type Role = 'buyer' | 'seller';
 
-// The persistent app header: brand · Buyer⇄Seller role toggle · wallet pill (balance + manage).
+// The persistent app header: brand · Buyer⇄Seller role toggle · status chips · wallet pill.
 // One install does both roles; the toggle is switchable anytime and persisted by App.
+//
+// ETHOnline 2026: two chips make the new guarantees visible rather than implicit — which
+// settlement network is live, and whether this wallet is backed by a verified unique
+// human. Both state what is actually true, including when the answer is "not verified".
 export default function TopBar({
   role,
   onRole,
@@ -20,6 +24,16 @@ export default function TopBar({
   onManage: () => void;
 }) {
   const addr = state?.buyer?.address ?? state?.wallet.address ?? '';
+  const net = state?.network;
+  const human = state?.human;
+  const humanTitle = !human?.enabled
+    ? 'Human proofs are turned off on this engine'
+    : !human.checked
+      ? 'Checking AgentBook on World Chain…'
+      : human.verified
+        ? `Backed by a verified unique human — AgentBook id ${human.humanId?.slice(0, 14)}…`
+        : 'This wallet is not registered in AgentBook. Sellers requiring a human will refuse it.';
+
   return (
     <header className="topbar">
       <div className="tb-brand">
@@ -49,6 +63,23 @@ export default function TopBar({
           <Gpu />
           <span className="ro-t">Share GPU &amp; Earn</span>
         </button>
+      </div>
+
+      <div className="tb-status">
+        {net && (
+          <span className="tb-chip net" title={`Settling on ${net.label} · ${net.explorer}`}>
+            <i className="mdot on" />
+            {net.label}
+          </span>
+        )}
+        {human?.enabled && (
+          <span
+            className={`tb-chip human${human.verified ? ' ok' : human.checked ? ' no' : ''}`}
+            title={humanTitle}
+          >
+            {human.verified ? '✓ human-verified' : human.checked ? 'not verified' : 'checking…'}
+          </span>
+        )}
       </div>
 
       <button className="wallet-pill" onClick={onManage} title="Manage wallet">

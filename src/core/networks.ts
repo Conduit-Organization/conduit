@@ -40,6 +40,12 @@ export interface NetworkProfile {
   testnet: boolean;
   /** The Graph network slug, when the network is supported by Subgraph Studio. */
   graphNetwork?: string;
+  /**
+   * Deployed subgraph query endpoint for THIS network's escrow. Each network has its own
+   * settlement history, so switching networks must switch the reputation source too —
+   * scoring an Arc seller against Sepolia's ledger would be quietly wrong.
+   */
+  subgraphUrl?: string;
 }
 
 /**
@@ -59,6 +65,7 @@ export const SEPOLIA: NetworkProfile = {
   gasIsSettlementToken: false, // seller earns USD₮, pays gas in ETH
   testnet: true,
   graphNetwork: 'sepolia',
+  subgraphUrl: 'https://api.studio.thegraph.com/query/1759016/conduit/v0.0.1',
 };
 
 /**
@@ -87,6 +94,7 @@ export const ARC_TESTNET: NetworkProfile = {
   gasIsSettlementToken: true, // USDC is the gas token — revenue and costs in one unit
   testnet: true,
   graphNetwork: 'arc-testnet',
+  subgraphUrl: 'https://api.studio.thegraph.com/query/1759016/conduit-arc/v0.0.1',
 };
 
 export const NETWORKS: Record<string, NetworkProfile> = {

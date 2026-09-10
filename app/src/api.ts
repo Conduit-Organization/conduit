@@ -35,6 +35,17 @@ export interface GlobalRecord {
   naiveReliability: number;
 }
 
+/** Whether this buyer wallet resolves to a unique human in AgentBook on World Chain. */
+export interface HumanStatus {
+  /** This engine attaches a proof at all (buyer-side switch). */
+  enabled: boolean;
+  verified: boolean;
+  /** Anonymous, stable across every wallet the same person backs. Not an identity. */
+  humanId: string | null;
+  /** False until the first lookup completes — "unknown", not "not human". */
+  checked: boolean;
+}
+
 /** Whether the global-reputation layer is actually live, so the UI never implies it is. */
 export interface GraphStatus {
   enabled: boolean;
@@ -65,6 +76,7 @@ export interface State {
   escrow?: boolean; // escrow (payment-channel) mode is enabled on this engine
   sessions?: EscrowSession[]; // open payment channels (instant paid answers)
   graph?: GraphStatus; // ETHOnline 2026 — global reputation layer status
+  human?: HumanStatus; // is THIS buyer wallet backed by a verified unique human
   humanProof?: boolean; // this engine attaches a World human proof to sessions
   network?: { name: string; label: string; explorer: string; symbol: string };
   ready: boolean;

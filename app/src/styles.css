@@ -788,6 +788,22 @@ body::after {
 .sg-switch.on { background: var(--mint-soft); border-color: var(--mint); }
 .sg-switch.on > i { transform: translateX(19px); background: var(--mint); }
 .sg-switch:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* --- ETHOnline 2026: header status chips --------------------------------- */
+.tb-status { display: flex; align-items: center; gap: 7px; margin-left: auto; margin-right: 10px; }
+.tb-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2px;
+  padding: 5px 9px; border-radius: 99px;
+  border: 1px solid var(--line); background: var(--ink-2); color: var(--muted);
+  white-space: nowrap;
+}
+.tb-chip.net { color: var(--muted); }
+/* Verified is stated positively; unverified is stated plainly rather than alarmingly —
+   it is a normal state, and sellers that do not require a human still serve it. */
+.tb-chip.human.ok { color: var(--mint); border-color: var(--mint-line); background: var(--mint-soft); }
+.tb-chip.human.no { color: var(--amber); border-color: rgba(255, 196, 77, 0.3); background: var(--amber-soft); }
+@media (max-width: 900px) { .tb-status { display: none; } }
 .ms-empty { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); padding: 18px 2px; }
 .ms-empty code { font-family: var(--font-mono); color: var(--mint); font-size: 12.5px; }
 .ms-empty b { color: var(--text); }

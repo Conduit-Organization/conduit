@@ -59,7 +59,7 @@ let providerPub: string | undefined;
 
 // ── Escrow (payment-channel) mode — opt-in via CONDUIT_ESCROW=1 + a deployed contract. The seller
 // verifies the buyer's on-chain channel, serves per signed voucher, and redeems in the background.
-const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : null;
+const escrowDep = cfg.escrow ? loadEscrowDeployment(cfg.network.name) : null;
 const esc = escrowDep ? createEscrowClient(cfg.rpcUrl, escrowDep.address, escrowDep.chainId) : null;
 const escrowWallet: BaseWallet | null = esc
   ? HDNodeWallet.fromPhrase(sellerMnemonic, undefined, "m/44'/60'/0'/0/1").connect(new JsonRpcProvider(cfg.rpcUrl))
@@ -77,14 +77,14 @@ const { createHumanity } = await import('../core/humanity');
 const { createGraphReputation } = await import('../core/graph-reputation');
 const { createReputation } = await import('../core/reputation');
 
-const requireHuman = process.env.CONDUIT_REQUIRE_HUMAN === '1';
+const requireHuman = cfg.requireHuman;
 const humanity = requireHuman
-  ? createHumanity({ worldChainRpcUrl: process.env.CONDUIT_WORLDCHAIN_RPC, log: (m) => console.log(m) })
+  ? createHumanity({ worldChainRpcUrl: cfg.worldChainRpcUrl, log: (m) => console.log(m) })
   : null;
 
 /** Reject a buyer whose qualified abandonment rate exceeds this. 0.5 = half their channels. */
-const MAX_BUYER_ABANDONMENT = Number(process.env.CONDUIT_MAX_BUYER_ABANDONMENT || '0.5');
-const graphEndpoint = process.env.CONDUIT_SUBGRAPH_URL || null;
+const MAX_BUYER_ABANDONMENT = cfg.maxBuyerAbandonment;
+const graphEndpoint = cfg.subgraphUrl;
 const graphRep = graphEndpoint
   ? createGraphReputation({
       endpoint: graphEndpoint,

@@ -72,7 +72,7 @@ const cfg = loadConfig();
 const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
 // Escrow (payment-channel) mode is opt-in: CONDUIT_ESCROW=1 + a deployed contract. The seller child
 // inherits CONDUIT_ESCROW via the spawned env, so enabling it here turns it on for both roles.
-const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : null;
+const escrowDep = cfg.escrow ? loadEscrowDeployment(cfg.network.name) : null;
 // ── ETHOnline 2026 ─────────────────────────────────────────────────────────────
 // First-party reputation (what I myself experienced) is unchanged and still the
 // authority once it has evidence. The Graph layer wraps it to fill the cold-start hole:
@@ -80,10 +80,10 @@ const escrowDep = process.env.CONDUIT_ESCROW === '1' ? loadEscrowDeployment() : 
 // degrades to price-then-speed. Both additions are opt-in by env; with neither set the
 // app behaves exactly as it did before.
 const localReputation = createReputation(); // persists to ~/.conduit/reputation.json
-const humanity = process.env.CONDUIT_HUMAN_PROOF === '1'
-  ? createHumanity({ worldChainRpcUrl: process.env.CONDUIT_WORLDCHAIN_RPC, log: (m) => console.log(m) })
+const humanity = cfg.humanProof
+  ? createHumanity({ worldChainRpcUrl: cfg.worldChainRpcUrl, log: (m) => console.log(m) })
   : null;
-const graphEndpoint = process.env.CONDUIT_SUBGRAPH_URL || null;
+const graphEndpoint = cfg.subgraphUrl;
 const reputation = graphEndpoint
   ? createGraphReputation({ endpoint: graphEndpoint, local: localReputation, humanity, log: (m) => console.log(m) })
   : localReputation;
@@ -239,6 +239,34 @@ function offerJson(o: { id: string; sellerWallet: string; model: string; priceBa
 
 // Status of the global-reputation layer, so the UI can say plainly whether it is live
 // rather than silently showing first-party numbers as if they were global.
+// The buyer's own humanity, cached — /api/state is polled every few seconds and must not
+// hit World Chain each time. Registration does not flip back and forth, so a long TTL is
+// correct; `null` means "not looked up yet" rather than "not human".
+let humanSelf: { verified: boolean; humanId: string | null; at: number } | null = null;
+const HUMAN_SELF_TTL = 5 * 60 * 1000;
+
+async function refreshHumanSelf(): Promise<void> {
+  if (!humanity || !buyer) return;
+  if (humanSelf && Date.now() - humanSelf.at < HUMAN_SELF_TTL) return;
+  try {
+    const id = await humanity.humanId(buyer.address);
+    humanSelf = { verified: !!id, humanId: id, at: Date.now() };
+  } catch {
+    // A failed lookup is not a verdict — leave the previous answer standing.
+  }
+}
+
+function humanStatusJson() {
+  return {
+    // Whether this engine attaches a proof at all (buyer-side switch).
+    enabled: !!humanity,
+    // Whether THIS wallet resolves to a unique human in AgentBook on World Chain.
+    verified: humanSelf?.verified ?? false,
+    humanId: humanSelf?.humanId ?? null,
+    checked: humanSelf !== null,
+  };
+}
+
 function graphStatusJson() {
   const rep: any = reputation;
   if (!graphEndpoint) return { enabled: false, live: false, countsHumans: false, error: null };
@@ -351,6 +379,7 @@ const server = http.createServer((req, res) => {
         return;
       }
       const active = storefront.getActive();
+      void refreshHumanSelf(); // background; never blocks the state poll
       const [bU, bE] = await Promise.all([buyer.tokenBalance(cfg.usdtAddress), buyer.ethBalance()]);
       json(res, 200, {
         wallet: w,
@@ -371,6 +400,7 @@ const server = http.createServer((req, res) => {
           remaining: formatUnits(BigInt(s.remaining), DEC),
         })),
         graph: graphStatusJson(),
+        human: humanStatusJson(),
         humanProof: !!humanity,
         network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol },
         ready: routerReady && !setupErr,
