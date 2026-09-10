@@ -28,6 +28,7 @@ const { createReputation } = await import('../core/reputation');
 const { createGraphReputation } = await import('../core/graph-reputation');
 const { createHumanity } = await import('../core/humanity');
 const { reliability, globalScore } = await import('../core/qualification');
+const { labelForChainId } = await import('../core/networks');
 const { createSellerManager } = await import('./seller');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
@@ -227,10 +228,18 @@ function globalJson(sellerWallet: string) {
   };
 }
 
-function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean; served?: number; failed?: number; successRate?: number }) {
+function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean; served?: number; failed?: number; successRate?: number; chainId?: number; token?: string }) {
+  // A seller's offer has always carried chainId + token on the wire, so cross-network
+  // sellers were already distinguishable — the UI just never showed it. A buyer settling
+  // on Sepolia cannot transact with a seller settling on Arc (different escrow
+  // deployments), so this has to be visible rather than inferred from a failure.
+  const sellerChain = o.chainId ?? cfg.chainId;
   return {
     id: o.id, address: o.sellerWallet, model: o.model, price: formatUnits(o.priceBaseUnits, DEC), tps: o.tps, online: o.online,
     served: o.served ?? 0, failed: o.failed ?? 0, successRate: o.successRate ?? 0.5,
+    chainId: sellerChain,
+    network: labelForChainId(sellerChain),
+    sameNetwork: sellerChain === cfg.chainId,
     // The blended score the "Auto" sort actually uses (storefront.ts:126-128).
     score: reputation.score(o.sellerWallet),
     global: globalJson(o.sellerWallet),

@@ -804,6 +804,26 @@ body::after {
 .tb-chip.human.ok { color: var(--mint); border-color: var(--mint-line); background: var(--mint-soft); }
 .tb-chip.human.no { color: var(--amber); border-color: rgba(255, 196, 77, 0.3); background: var(--amber-soft); }
 @media (max-width: 900px) { .tb-status { display: none; } }
+
+/* A seller on another settlement network cannot be paid from here — the escrow
+   deployments are separate. Say so on the card rather than letting a purchase fail. */
+.ms-net { font-family: var(--font-mono); font-size: 10px; color: var(--muted-2); }
+.ms-net.other { color: var(--amber); }
+
+/* --- ETHOnline 2026: a seller's refusal, rendered as a decision not a crash -- */
+.refusal { border-left: 2px solid var(--amber); padding: 2px 0 2px 11px; }
+.rf-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rf-tag {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--amber); background: var(--amber-soft); border-radius: 4px; padding: 2px 6px;
+}
+.rf-head code { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+.rf-body { margin-top: 7px; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.rf-layer {
+  display: inline-block; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.6px;
+  color: var(--mint); border: 1px solid var(--mint-line); border-radius: 4px;
+  padding: 1px 5px; margin-right: 7px; vertical-align: 1px;
+}
 .ms-empty { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); padding: 18px 2px; }
 .ms-empty code { font-family: var(--font-mono); color: var(--mint); font-size: 12.5px; }
 .ms-empty b { color: var(--text); }

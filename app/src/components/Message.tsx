@@ -68,6 +68,61 @@ function Telemetry({ r }: { r: AskResult }) {
   );
 }
 
+
+// ETHOnline 2026 — a seller REFUSING a session is a designed outcome, not a failure, so
+// it should not render as a crash. Each reason names the layer that refused and what it
+// means, because "which check said no" is the whole point of an accountable market.
+const REFUSALS: Record<string, { layer: string; what: string }> = {
+  'unverified human': {
+    layer: 'World',
+    what: 'This seller only admits buyers backed by a verified unique human. This wallet is not registered in AgentBook on World Chain.',
+  },
+  'buyer abandonment history': {
+    layer: 'The Graph',
+    what: 'This seller read your on-chain settlement record and declined — too many channels opened and abandoned without settling.',
+  },
+  'no open channel': {
+    layer: 'Payment',
+    what: 'No funded payment channel with this seller. Being a verified human is not enough on its own — payment and personhood are independent requirements.',
+  },
+  'deposit below price': {
+    layer: 'Payment',
+    what: 'Your channel deposit is smaller than this seller\'s price per answer.',
+  },
+  'channel expired': {
+    layer: 'Payment',
+    what: 'Your channel with this seller has passed its expiry. Reclaim the remainder and open a new one.',
+  },
+  'epoch mismatch': {
+    layer: 'Payment',
+    what: 'The channel was reopened since this session started. Reconnect to pick up the new epoch.',
+  },
+  'seller does not accept escrow channels': {
+    layer: 'Payment',
+    what: 'This seller has not enabled payment channels.',
+  },
+};
+
+function Refusal({ reason }: { reason: string }) {
+  // Match the longest known prefix, so 'channel read failed: <rpc detail>' still resolves.
+  const key = Object.keys(REFUSALS).find((k) => reason.startsWith(k));
+  const info = key ? REFUSALS[key]! : null;
+  return (
+    <div className="refusal">
+      <div className="rf-head">
+        <span className="rf-tag">refused</span>
+        <code>{reason}</code>
+      </div>
+      {info && (
+        <div className="rf-body">
+          <span className="rf-layer">{info.layer}</span>
+          {info.what}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Message({ m }: { m: ChatMsg }) {
   return (
     <motion.div
@@ -85,7 +140,11 @@ export default function Message({ m }: { m: ChatMsg }) {
             <span>routing your question…</span>
           </div>
         ) : m.error ? (
-          <div className="errline">⚠ {m.error}</div>
+          m.error.startsWith('seller rejected: ') ? (
+            <Refusal reason={m.error.slice('seller rejected: '.length)} />
+          ) : (
+            <div className="errline">⚠ {m.error}</div>
+          )
         ) : (
           <>
             {m.result && <Stamp r={m.result} />}

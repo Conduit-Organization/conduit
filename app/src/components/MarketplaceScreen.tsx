@@ -138,9 +138,9 @@ export default function MarketplaceScreen({
             return (
               <button
                 key={s.id}
-                className={`ms-card${s.online ? '' : ' off'}`}
-                onClick={() => s.online && onPick(s.id)}
-                disabled={!s.online}
+                className={`ms-card${s.online && s.sameNetwork !== false ? '' : ' off'}`}
+                onClick={() => s.online && s.sameNetwork !== false && onPick(s.id)}
+                disabled={!s.online || s.sameNetwork === false}
               >
                 <div className="ms-card-top">
                   <span className="ms-model">
@@ -157,6 +157,13 @@ export default function MarketplaceScreen({
                 </div>
                 <div className="ms-sub">{fmt(s.price)} USD₮ · {Math.round(s.tps)} tps</div>
                 <div className="ms-addr">{short(s.address)}</div>
+                {s.network && (
+                  <div className={`ms-net${s.sameNetwork === false ? ' other' : ''}`}>
+                    {s.sameNetwork === false
+                      ? `settles on ${s.network} — you are on a different network`
+                      : `settles on ${s.network}`}
+                  </div>
+                )}
                 <div className={`ms-rep ${rep(s).cls}`}>{rep(s).label}</div>
 
                 {s.global ? (
@@ -183,8 +190,14 @@ export default function MarketplaceScreen({
                   )
                 )}
 
-                <div className={`ms-state${s.online ? ' on' : ''}`}>
-                  {s.online ? (state?.selected === s.id ? '✓ active — tap to use' : 'online — tap to use') : 'offline'}
+                <div className={`ms-state${s.online && s.sameNetwork !== false ? ' on' : ''}`}>
+                  {!s.online
+                    ? 'offline'
+                    : s.sameNetwork === false
+                      ? 'unreachable from your network'
+                      : state?.selected === s.id
+                        ? '✓ active — tap to use'
+                        : 'online — tap to use'}
                 </div>
               </button>
             );

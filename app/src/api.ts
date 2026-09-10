@@ -16,6 +16,11 @@ export interface Peer {
   // not configured or the seller has no on-chain history.
   score?: number;
   global?: GlobalRecord | null;
+  /** Which chain this seller settles on — offers have always carried it on the wire. */
+  chainId?: number;
+  network?: string;
+  /** False when this seller settles on a different network than you; you cannot pay them. */
+  sameNetwork?: boolean;
 }
 
 /** A seller's settlement record across ALL buyers, indexed from ConduitEscrow. */
