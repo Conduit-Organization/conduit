@@ -447,7 +447,17 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && p === '/api/state') {
       const w = walletStatus();
       if (!wallet) {
-        json(res, 200, { wallet: w, ready: false, sellersOnline: 0, peer: null, selected: 'auto', setupErr: setupErr ?? null, modelProgress });
+        // Locked is still a state worth describing. Which network this app settles on, and
+        // whether the reputation layer is live, do not depend on a wallet — and a first-time
+        // user staring at a lock screen should be able to see that the thing is configured
+        // and working, not a blank shell.
+        json(res, 200, {
+          wallet: w, ready: false, sellersOnline: 0, peer: null, selected: 'auto',
+          alwaysPay: cfg.alwaysPay,
+          network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol },
+          integrations: integrationsJson(),
+          setupErr: setupErr ?? null, modelProgress,
+        });
         return;
       }
       const active = storefront.getActive();
@@ -573,7 +583,9 @@ server.listen(PORT, () => {
   console.log(`\n  ⬡ Conduit — open  →  http://localhost:${PORT}\n`);
   console.log(`  wallet: ${w.unlocked ? `unlocked ${w.address}` : w.exists ? 'locked (enter password)' : 'none yet (create or import in the app)'}`);
   if (!built) console.log('  note: React app not built — run `npm run app:build` for the UI (showing a build prompt until then).');
-  console.log('  warming up the local model…\n');
+  console.log(cfg.alwaysPay
+    ? '  every answer is bought from a peer (CONDUIT_ALWAYS_PAY=0 restores free local routing)\n'
+    : '  warming up the local model…\n');
 });
 
 async function shutdown() {
