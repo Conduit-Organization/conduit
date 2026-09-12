@@ -147,6 +147,29 @@ async function main(): Promise<void> {
     console.log('\n  (set CONDUIT_DEMO_BUYER_KEY to a registered wallet to also prove the accept path)');
   }
 
+  // ── sybil collapse, on real registrations ──
+  // The reputation layer counts unique HUMANS, not unique addresses. That only works if
+  // two wallets backed by the same person resolve to the same identifier — which is a
+  // property of World ID, not of our code. CONDUIT_SECOND_WALLET lets this be checked
+  // against two genuinely registered addresses rather than a stub.
+  const second = process.env.CONDUIT_SECOND_WALLET;
+  if (demoKey && second) {
+    const first = new Wallet(demoKey.startsWith('0x') ? demoKey : `0x${demoKey}`).address;
+    const idA = await humanity.humanId(first);
+    const idB = await humanity.humanId(second);
+    if (idA && idB) {
+      console.log('\nSybil collapse (two registered wallets, one person):');
+      check(
+        'two distinct addresses resolve to ONE human id',
+        idA === idB,
+        `${first.slice(0, 10)}… and ${second.slice(0, 10)}… → ${idA.slice(0, 18)}…`
+      );
+      const addresses = new Set([first.toLowerCase(), second.toLowerCase()]).size;
+      const humans = new Set([idA, idB]).size;
+      check('breadth counts people, not keypairs', addresses === 2 && humans === 1, `${addresses} addresses → ${humans} human`);
+    }
+  }
+
   console.log('\nWhat this proves:');
   console.log('  The signature, freshness, seller-binding and replay checks all PASS for');
   console.log('  the genuine proof — it is refused solely at the AgentBook lookup, which is');
