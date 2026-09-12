@@ -55,6 +55,10 @@ if (process.env.CONDUIT_SELLER_SELFCHECK === '1') {
       const modelId = await sdk.loadModel({ modelSrc, modelType: 'llm' });
       await sdk.unloadModel({ modelId, clearStorage: false });
     }
+    // Tear the provider down explicitly. This child announces on the DHT like any other,
+    // and an announcement that outlives the process is one buyers can still be routed to —
+    // to a provider whose firewall admits no one.
+    try { await sdk.stopQVACProvider(); } catch { /* going away regardless */ }
     console.error('ok');
     process.exit(0);
   } catch (e: any) {
@@ -126,6 +130,8 @@ const offer = resolveOffer();
 const quotes = new Map<string, { balanceBefore: bigint }>();
 const used = new Set<string>();
 let providerPub: string | undefined;
+// Exactly who the running provider's firewall admits — fixed at the moment it started.
+let providerStartedWith = new Set<string>();
 
 // ── Escrow (payment-channel) mode — opt-in via CONDUIT_ESCROW=1 + a deployed contract. The seller
 // verifies the buyer's on-chain channel, serves per signed voucher, and redeems in the background.
@@ -199,10 +205,37 @@ async function balanceOrNull(): Promise<bigint | null> {
   catch (e: any) { console.log('[seller] rpc error reading balance:', e?.message ?? e); return null; }
 }
 
+/**
+ * The firewall-gated provider, admitting every buyer that has paid.
+ *
+ * This used to start the provider on the first grant and cache the pubkey, so the
+ * allow-list was frozen to whoever paid first. Every later buyer received a provider key
+ * they were not admitted to and failed at the DHT with PEER_CONNECTION_FAILED — after
+ * their voucher had already been drawn. A seller could serve exactly one buyer per run,
+ * and the second one paid for the privilege of finding out.
+ *
+ * The SDK exposes no way to amend a running provider's firewall, and it cannot survive a
+ * stop/start cycle in one process (the second start never returns). So the allow-list is
+ * accumulated and the provider is started ONCE, on the first grant, admitting every buyer
+ * granted so far; a buyer who arrives later and is not on that list is refused honestly
+ * instead of being handed a key that cannot work.
+ */
+const admitted = new Set<string>();
+
 async function ensureProvider(buyerPub: string): Promise<string> {
+  admitted.add(buyerPub);
   if (!providerPub) {
-    const res = await sdk.startQVACProvider({ firewall: { mode: 'allow', publicKeys: [buyerPub] } });
+    const res = await sdk.startQVACProvider({ firewall: { mode: 'allow', publicKeys: [...admitted] } });
     providerPub = res.publicKey;
+    providerStartedWith = new Set(admitted);
+    return providerPub!;
+  }
+  if (!providerStartedWith.has(buyerPub)) {
+    throw new Error(
+      'this seller is already serving another buyer and cannot admit a second one in this ' +
+      'session — the inference runtime does not allow its firewall to be amended once running. ' +
+      'Restart the seller to serve you.',
+    );
   }
   return providerPub!;
 }
@@ -406,7 +439,16 @@ async function proveCanServe(model: string): Promise<void> {
     let child;
     try {
       child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
-        env: { ...process.env, CONDUIT_SELLER_SELFCHECK: '1', CONDUIT_SELFCHECK_MODEL: model },
+        env: {
+          ...process.env,
+          CONDUIT_SELLER_SELFCHECK: '1',
+          CONDUIT_SELFCHECK_MODEL: model,
+          // A fresh DHT identity. Without this the child inherits QVAC_HYPERSWARM_SEED from
+          // the parent and announces the SAME provider key the seller will later use — with
+          // a firewall that admits nobody.
+          QVAC_HYPERSWARM_SEED: randomSeedHex(),
+          PROVIDER_SEED: '',
+        },
         stdio: ['ignore', 'ignore', 'pipe'],
       });
     } catch (e: any) {
