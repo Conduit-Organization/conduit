@@ -95,7 +95,13 @@ export default function SellerScreen({
           </div>
         ) : (
           <p className="gate-sub" style={{ textAlign: 'left', margin: '12px 0 4px' }}>
-            No capability profile yet. Run <code>npm run bench</code> on this machine to measure what it can
+            {/* Naming the cause matters: "benchmarked on linux/x64, this machine is darwin/arm64"
+                is a different problem from "never benchmarked", and only one of them is
+                surprising to someone who has run bench before. */}
+            {profile?.needsBench
+              ? <>Nothing to offer yet — {profile.needsBench}. </>
+              : <>No capability profile yet. </>}
+            Run <code>npm run bench</code> on this machine to measure what it can actually
             sell (writes <code>bench-profile.json</code>), then come back.
           </p>
         )}

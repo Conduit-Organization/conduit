@@ -70,7 +70,9 @@ export function createMarketAgent(deps: MarketAgentDeps): MarketAgent {
       // verbatim. Everything underneath gets translated, because a buyer shown an ABI
       // decode error has no idea what to do next.
       const { note, raw } = explainPurchaseFailure(e, deps.symbol);
-      if (note !== raw) log(`[agent] purchase failed: ${raw}`); // keep the original in the log
+      // ALWAYS log the original. Logging only when the text was rewritten meant an
+      // unrecognised failure — exactly the kind worth investigating — left no trace at all.
+      log(`[agent] purchase failed: ${raw}`);
       return { source: 'declined', reason: 'error', answer: draft, consistency, cost: 0n, note };
     }
   }

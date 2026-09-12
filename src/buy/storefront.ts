@@ -320,14 +320,18 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
     }
 
-    if (!ch.open) {
-      // Ask before paying. Opening a channel is a real on-chain deposit, and every reason
-      // a seller might refuse — its policy on human proofs, this buyer's abandonment
-      // record — is knowable before a single unit moves. A buyer who is going to be turned
-      // away should find that out while it still costs nothing.
-      const verdict = await probeSeller(rec, offer, ch.epoch.toString());
-      if (verdict && !verdict.ok) throw new Error(`seller rejected: ${verdict.reason ?? 'seller declined'}`);
+    // Ask before committing anything. Every reason a seller might refuse — its policy on
+    // human proofs, this buyer's abandonment record — is knowable before a single unit
+    // moves, so a buyer who is going to be turned away finds out while it costs nothing.
+    //
+    // Asked on every new session, not only when a channel is being opened. A buyer
+    // returning to an EXISTING channel has nothing left to spend, but it does have two
+    // minutes of waiting to lose, and the previous version skipped the question in exactly
+    // that case — walking straight back into the silence it was written to catch.
+    const verdict = await probeSeller(rec, offer, ch.epoch.toString());
+    if (verdict && !verdict.ok) throw new Error(`seller rejected: ${verdict.reason ?? 'seller declined'}`);
 
+    if (!ch.open) {
       log(`[storefront] opening escrow channel → ${offer.sellerWallet.slice(0, 10)}… (deposit ${deposit})`);
       await esc.open(escrowWallet, offer.token, offer.sellerWallet, deposit, duration);
       ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
@@ -352,7 +356,21 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
 
     // ask the seller to verify the channel on-chain and grant the gated provider
     send(rec.conn, { type: 'sessionOpen', buyerConsumerPub: deps.consumerPub, buyerWallet: escrowWallet.address, epoch: ch.epoch.toString(), humanProof });
-    const grant = await waitFor(rec, 'sessionGrant', 120_000);
+    // Two minutes was a long time to learn nothing. A seller that has not answered in 45s
+    // is not thinking — the checks it runs are chain reads that take seconds — so this
+    // reports sooner and says what it observed rather than naming an internal message.
+    let grant: any;
+    try {
+      grant = await waitFor(rec, 'sessionGrant', 45_000);
+    } catch (e: any) {
+      if (String(e?.message ?? e).startsWith('timeout waiting for')) {
+        throw new Error(
+          'the seller stopped responding after the channel was funded — nothing more was charged, ' +
+          'and your deposit is still in the channel. Pick another seller, or ask this one to update.',
+        );
+      }
+      throw e;
+    }
     const sess: SessionState = { epoch: ch.epoch, cumulative: ch.claimed, deposit: ch.deposit, providerPub: grant.providerPub, expiry: ch.expiry };
     sessionStates.set(key, sess);
     return sess;

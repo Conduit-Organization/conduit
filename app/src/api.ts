@@ -191,6 +191,13 @@ export interface SellerProfile {
   ts: string | null;
   offer: SellerOfferProfile | null;
   models: SellableModel[]; // runnable models this machine benchmarked (each with its tiered price)
+  /**
+   * Why there is nothing to offer, when there is nothing to offer. Present both when this
+   * machine has never been benchmarked and when the benchmark on disk belongs to a
+   * different machine — the shipped profile is the generating machine's, so a fresh
+   * install starts out holding numbers it has not earned.
+   */
+  needsBench?: string;
 }
 
 async function postJson(url: string, body: unknown): Promise<any> {

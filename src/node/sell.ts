@@ -4,6 +4,7 @@
 // quote (single-use nonce) → verify a signed, on-chain-confirmed payment → open a firewall-gated
 // QVAC provider for exactly that buyer → grant the provider pubkey. No orchestrator.
 import crypto from 'node:crypto';
+import { profileForThisMachine } from '../core/bench-profile';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
@@ -39,19 +40,52 @@ const seller = await getAccount(sellerMnemonic, cfg.rpcUrl, 1); // seller earnin
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RESOURCES = process.env.CONDUIT_RESOURCES || path.join(here, '../..');
-let offer = { model: 'QWEN3_4B_INST_Q4_K_M', priceBaseUnits: priceFor('QWEN3_4B_INST_Q4_K_M'), tps: 0 };
-try {
-  const profile = JSON.parse(readFileSync(path.join(RESOURCES, 'bench-profile.json'), 'utf8'));
-  offer = offerFromProfile(profile) ?? offer;
-  // The seller may override the prober's pick (CONDUIT_SELLER_MODEL) — but ONLY to a model this
-  // machine actually benchmarked as runnable (no "might crash" choices). Price follows the model.
+interface SellerOfferSpec { model: string; priceBaseUnits: bigint; tps: number }
+
+/**
+ * What this machine will advertise — or nothing, if it cannot honestly advertise anything.
+ *
+ * `bench-profile.json` is committed and shipped inside the package so a fresh install has
+ * something to read, which also means every install begins holding the numbers of whatever
+ * machine generated it. A seller that trusts those advertises capability it has never
+ * demonstrated: the offer looks ordinary, the economic checks pass, and the model fails to
+ * load only after a buyer has paid. Refusing to start is the honest failure.
+ */
+function resolveOffer(): SellerOfferSpec {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path.join(RESOURCES, 'bench-profile.json'), 'utf8'));
+  } catch (e: any) {
+    console.error(`\n[seller] no benchmark for this machine (${e?.message ?? e}).`);
+    console.error('[seller] run `npm run bench` here, then start the seller again.\n');
+    process.exit(1);
+  }
+
+  const { profile, reason } = profileForThisMachine(raw);
+  if (!profile) {
+    console.error(`\n[seller] will not advertise: ${reason}.`);
+    console.error('[seller] run `npm run bench` on THIS machine first — it measures which models');
+    console.error('[seller] actually run here and how fast, which is what buyers are shown.\n');
+    process.exit(1);
+  }
+
+  const best = offerFromProfile(profile);
+  // The seller may override the prober's pick (CONDUIT_SELLER_MODEL) — but ONLY to a model
+  // this machine actually benchmarked as runnable (no "might crash" choices). Price follows
+  // the model.
   const chosen = process.env.CONDUIT_SELLER_MODEL;
   if (chosen) {
-    const m = profile.models?.find((x: any) => x.id === chosen && x.loaded);
-    if (m) offer = { model: chosen, priceBaseUnits: priceFor(chosen), tps: m.tps ?? 0 };
-    else console.log(`[seller] requested model ${chosen} not in this machine's runnable set — keeping ${offer.model}`);
+    const m = profile.models?.find((x) => x.id === chosen && x.loaded);
+    if (m) return { model: chosen, priceBaseUnits: priceFor(chosen), tps: m.tps ?? 0 };
+    console.log(`[seller] requested model ${chosen} is not in this machine's runnable set`);
   }
-} catch { /* default */ }
+  if (best) return best;
+
+  console.error('\n[seller] this machine benchmarked no model it can serve — run `npm run bench`.\n');
+  process.exit(1);
+}
+
+const offer = resolveOffer();
 
 // nonce → seller USD₮ balance at quote time (for confirm-by-delta); used nonces can't be replayed.
 const quotes = new Map<string, { balanceBefore: bigint }>();

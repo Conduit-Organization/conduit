@@ -31,6 +31,7 @@ const { createHumanity } = await import('../core/humanity');
 const AGENT_BOOK_ADDRESS = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA';
 const { reliability, globalScore } = await import('../core/qualification');
 const { labelForChainId, sameSettlementNetwork } = await import('../core/networks');
+const { profileForThisMachine } = await import('../core/bench-profile');
 const { createSellerManager } = await import('./seller');
 const { createHumanityRegistrar } = await import('./humanity-register');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
@@ -164,7 +165,14 @@ const seller = createSellerManager({
 // seller screen can show "you'll offer Qwen3 4B @ 0.01 · ~59 tps" before going online.
 function sellerProfile() {
   try {
-    const profile = JSON.parse(readFileSync(path.join(RESOURCES, 'bench-profile.json'), 'utf8'));
+    const raw = JSON.parse(readFileSync(path.join(RESOURCES, 'bench-profile.json'), 'utf8'));
+    // Only this machine's own measurements may be offered. The shipped profile belongs to
+    // whichever machine produced it, and offering its models here would let someone go
+    // online advertising hardware they do not have — the buyer finds out after paying.
+    const { profile, reason } = profileForThisMachine(raw);
+    if (!profile) {
+      return { backend: null, platform: null, topSellable: null, recommended: null, localDraft: null, ts: null, offer: null, models: [], needsBench: reason };
+    }
     const o = offerFromProfile(profile);
     return {
       backend: profile.backend ?? null,
@@ -183,7 +191,7 @@ function sellerProfile() {
         .map((m: any) => ({ id: m.id, loaded: true, tps: m.tps ?? null, backend: m.backend ?? null, price: formatUnits(priceFor(m.id), DEC) })),
     };
   } catch {
-    return { backend: null, platform: null, topSellable: null, recommended: null, localDraft: null, ts: null, offer: null, models: [] };
+    return { backend: null, platform: null, topSellable: null, recommended: null, localDraft: null, ts: null, offer: null, models: [], needsBench: 'no benchmark on this machine yet' };
   }
 }
 
