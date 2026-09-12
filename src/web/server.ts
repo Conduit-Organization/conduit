@@ -628,6 +628,20 @@ const server = http.createServer((req, res) => {
   })();
 });
 
+// A port already in use used to kill the engine with an unhandled 'error' event and no
+// explanation — the window simply never appeared. The Electron shell picks a free port, so
+// this is the standalone path, plus the small race where the port is taken between that
+// check and this listen.
+server.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n  port ${PORT} is already in use — another Conduit engine is probably still running.`);
+    console.error(`  stop it, or start this one on another port:  PORT=${PORT + 1} npm run web\n`);
+    process.exit(2);
+  }
+  console.error('[server] fatal:', e.message);
+  process.exit(1);
+});
+
 server.listen(PORT, () => {
   const built = existsSync(path.join(appDist, 'index.html'));
   const w = walletStatus();
