@@ -244,7 +244,7 @@ function getAgent(): any {
   // Always-pay needs a storefront and nothing else. Requiring routerReady here would gate
   // the whole product on a local model that never answers.
   const ready = cfg.alwaysPay ? !!storefront : routerReady && !!storefront;
-  if (!agent && ready) agent = createMarketAgent({ router, policy, storefront, alwaysPay: cfg.alwaysPay, log: (m) => console.log(m) });
+  if (!agent && ready) agent = createMarketAgent({ router, policy, storefront, alwaysPay: cfg.alwaysPay, symbol: cfg.network.settlementSymbol, log: (m) => console.log(m) });
   return agent;
 }
 

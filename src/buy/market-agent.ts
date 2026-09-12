@@ -15,6 +15,7 @@
 // local samples per question is real latency, and paying for work whose result is
 // discarded would be dishonest telemetry.
 import type { Router } from './router';
+import { explainPurchaseFailure } from './explain';
 import type { SpendPolicy } from './policy';
 import type { Storefront } from './storefront';
 import type { AgentResult } from './agent';
@@ -26,6 +27,8 @@ export interface MarketAgentDeps {
   predict?: number;
   /** Buy every answer from a peer instead of ever answering locally. Default true. */
   alwaysPay?: boolean;
+  /** Settlement ticker, so failure advice names the right asset. */
+  symbol?: string;
   log?: (m: string) => void;
 }
 
@@ -63,12 +66,12 @@ export function createMarketAgent(deps: MarketAgentDeps): MarketAgent {
       return { source: 'paid', answer: res.answer, consistency, cost: res.cost, tx: res.txHash, stats: res.stats };
     } catch (e: any) {
       // The seller's refusal reason matters — it is how the accountability layers become
-      // visible ('unverified human', 'buyer abandonment history'), so pass it through
-      // verbatim rather than flattening it into a generic failure.
-      return {
-        source: 'declined', reason: 'error', answer: draft, consistency, cost: 0n,
-        note: String(e?.message ?? e),
-      };
+      // visible ('unverified human', 'buyer abandonment history'), so it passes through
+      // verbatim. Everything underneath gets translated, because a buyer shown an ABI
+      // decode error has no idea what to do next.
+      const { note, raw } = explainPurchaseFailure(e, deps.symbol);
+      if (note !== raw) log(`[agent] purchase failed: ${raw}`); // keep the original in the log
+      return { source: 'declined', reason: 'error', answer: draft, consistency, cost: 0n, note };
     }
   }
 
