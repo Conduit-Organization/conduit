@@ -102,7 +102,15 @@ export const NETWORKS: Record<string, NetworkProfile> = {
   [ARC_TESTNET.name]: ARC_TESTNET,
 };
 
-export const DEFAULT_NETWORK = SEPOLIA.name;
+/**
+ * Arc is the default settlement network.
+ *
+ * USDC is both the gas token and the settlement token there, so a seller's revenue and
+ * its costs are denominated in the same unit and a buyer needs exactly one asset to
+ * participate. Sepolia remains fully supported (CONDUIT_NETWORK=sepolia) and still holds
+ * the project's original settlement history.
+ */
+export const DEFAULT_NETWORK = ARC_TESTNET.name;
 
 /**
  * Resolve a profile by name. Unknown names fall back to the default rather than throwing:

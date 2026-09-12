@@ -30,6 +30,15 @@ export interface ConduitConfig {
   worldChainRpcUrl: string | undefined;
   /** Seller side: refuse a buyer whose qualified abandonment rate exceeds this. */
   maxBuyerAbandonment: number;
+  /**
+   * Buy every answer from a peer rather than ever answering on-device.
+   *
+   * Conduit is a market: the product is that capacity is bought from a peer and settled
+   * on-chain. Answering locally for free made that invisible half the time. Set
+   * CONDUIT_ALWAYS_PAY=0 to restore the original confidence-routing behaviour, where an
+   * on-device model answers easy prompts free and escalates only uncertain ones.
+   */
+  alwaysPay: boolean;
 }
 
 export function loadConfig(): ConduitConfig {
@@ -61,5 +70,6 @@ export function loadConfig(): ConduitConfig {
     requireHuman: flag('CONDUIT_REQUIRE_HUMAN', false),
     worldChainRpcUrl: pick('CONDUIT_WORLDCHAIN_RPC'),
     maxBuyerAbandonment: Number(pick('CONDUIT_MAX_BUYER_ABANDONMENT') || '0.5'),
+    alwaysPay: flag('CONDUIT_ALWAYS_PAY', true),
   };
 }

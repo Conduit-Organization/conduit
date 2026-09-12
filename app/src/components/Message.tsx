@@ -28,13 +28,14 @@ function Stamp({ r }: { r: AskResult }) {
     );
   }
   if (r.source === 'declined') {
-    // The router WANTED a remote peer, but we fell back to the local draft. Tell the user the real
-    // reason instead of always blaming the budget.
+    // Every answer is bought from a peer, so a decline means the purchase did NOT happen.
+    // Name the actual cause — the seller's refusal reason is how the accountability layers
+    // become visible — rather than implying an answer was served anyway.
     const label =
-      r.reason === 'no-seller' ? 'No peer online · on-device'
-      : r.reason === 'error' ? 'Peer unreachable · on-device'
-      : r.reason === 'budget' ? 'Budget reached · on-device'
-      : 'Answered on-device';
+      r.reason === 'no-seller' ? 'No peer online'
+      : r.reason === 'budget' ? 'Spend limit reached'
+      : r.reason === 'error' ? 'Purchase refused'
+      : 'Not answered';
     return (
       <span className="stamp declined" title={r.note ?? undefined}>
         <Local /> {label}

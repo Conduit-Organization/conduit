@@ -58,8 +58,8 @@ export default function MarketplaceScreen({
       <div className="screen-head">
         <h1>Marketplace</h1>
         <p>
-          Pick a GPU peer — or <b>Auto</b> — then ask. Easy questions answer{' '}
-          <b>free, on-device</b>; your chosen peer is paid <span className="pay">only when it's worth escalating</span>.
+          Pick a GPU peer — or <b>Auto</b>, which ranks on on-chain settlement history — then ask.
+          Every answer is <span className="pay">bought from that peer and settled in USDC</span>.
           <span className="count"> · {online.length} online</span>
         </p>
       </div>

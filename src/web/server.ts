@@ -158,16 +158,21 @@ function setProgress(p: ModelProgress) {
 // The local router warms independently of the wallet (free, on-device answers need no key).
 let router: any = null;
 let routerReady = false;
-const routerPromise = (async () => {
-  try {
-    router = await createRouter({ k: 5, verify: process.env.CONDUIT_VERIFY === '1', onProgress: (pr) => setProgress({ phase: 'downloading', model: pr.model, percentage: pr.percentage }) });
-    routerReady = true;
-    setProgress({ phase: 'ready' });
-  } catch (e: any) {
-    setupErr = String(e?.message ?? e);
-    setProgress({ phase: 'error', message: setupErr });
-  }
-})();
+// In always-pay mode every answer is bought from a peer, so the on-device router is
+// never consulted. Warming it would download ~500 MB and hold the app in "warming up"
+// for a model it will not use — so skip it entirely and be ready immediately.
+const routerPromise = cfg.alwaysPay
+  ? (setProgress({ phase: 'ready' }), Promise.resolve())
+  : (async () => {
+      try {
+        router = await createRouter({ k: 5, verify: process.env.CONDUIT_VERIFY === '1', onProgress: (pr) => setProgress({ phase: 'downloading', model: pr.model, percentage: pr.percentage }) });
+        routerReady = true;
+        setProgress({ phase: 'ready' });
+      } catch (e: any) {
+        setupErr = String(e?.message ?? e);
+        setProgress({ phase: 'error', message: setupErr });
+      }
+    })();
 
 async function unlockWith(mnemonic: string): Promise<string> {
   const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
@@ -186,7 +191,10 @@ function lock(): void {
 }
 
 function getAgent(): any {
-  if (!agent && routerReady && storefront) agent = createMarketAgent({ router, policy, storefront });
+  // Always-pay needs a storefront and nothing else. Requiring routerReady here would gate
+  // the whole product on a local model that never answers.
+  const ready = cfg.alwaysPay ? !!storefront : routerReady && !!storefront;
+  if (!agent && ready) agent = createMarketAgent({ router, policy, storefront, alwaysPay: cfg.alwaysPay, log: (m) => console.log(m) });
   return agent;
 }
 
@@ -425,9 +433,10 @@ const server = http.createServer((req, res) => {
         })),
         graph: graphStatusJson(),
         human: humanStatusJson(),
+        alwaysPay: cfg.alwaysPay,
         humanProof: !!humanity,
         network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol },
-        ready: routerReady && !setupErr,
+        ready: (cfg.alwaysPay ? !!storefront : routerReady) && !setupErr,
         setupErr: setupErr ?? null,
         modelProgress,
       });

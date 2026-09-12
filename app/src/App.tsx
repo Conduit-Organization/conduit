@@ -173,7 +173,9 @@ export default function App() {
                   <Back /> Marketplace
                 </button>
                 <span className="chat-peer">
-                  {active ? `paying: ${modelName(active.model)} · ${active.price} USD₮` : 'free · on-device until escalation'}
+                  {active
+                    ? `buying from ${modelName(active.model)} · ${active.price} ${state.network?.symbol ?? 'USDC'} per answer`
+                    : 'no peer selected — pick one in the marketplace'}
                 </span>
               </div>
               <Thread messages={messages} onExample={send} />

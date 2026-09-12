@@ -36,9 +36,9 @@ export default function Thread({
               Ask <em>anything.</em>
             </h1>
             <p>
-              Easy questions are answered <b>free, on your device</b>. Hard ones quietly{' '}
-              <span className="pay">pay a peer's GPU</span> a fraction of a cent in USD₮ — end-to-end
-              encrypted, never through a cloud.
+              Every answer is bought from <b>a peer's GPU</b> and settled on-chain —{' '}
+              <span className="pay">a fraction of a cent in USDC</span>, wallet to wallet, end-to-end
+              encrypted and never through a cloud.
             </p>
             <div className="chips">
               {EXAMPLES.map((q) => (
