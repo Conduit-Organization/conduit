@@ -27,6 +27,41 @@ const { send, onMessages, bindMessage } = await import('../core/protocol');
 const { createEscrowClient, loadEscrowDeployment } = await import('../core/escrow');
 const sdk: any = await import('@qvac/sdk');
 
+// ── Can this machine serve, right now? ────────────────────────────────────────────────
+//
+// bench-profile.json is a record of what was true on some machine at some point. Matching
+// its platform/arch proves only that the record is OURS — not that it is still true. A
+// machine whose model cache has been emptied, or whose inference runtime cannot load at
+// all, still passes that check and still advertises. The buyer discovers otherwise after
+// paying.
+//
+// So before advertising, the seller proves it can serve by doing it: start the provider,
+// load the model it intends to sell, unload, exit. Only starting the runtime is evidence
+// about now.
+//
+// This runs in a CHILD process, re-entering this same file with CONDUIT_SELLER_SELFCHECK=1.
+// Two reasons it cannot be done in-process: the SDK does not survive a provider stop/start
+// cycle (the second start never returns), and a runtime that dies on dlopen takes the
+// process with it. A child contains both.
+if (process.env.CONDUIT_SELLER_SELFCHECK === '1') {
+  const model = process.env.CONDUIT_SELFCHECK_MODEL || '';
+  const fail = (why: string) => { console.error(why); process.exit(1); };
+  try {
+    // The firewall admits nobody: this is a health check, not a grant.
+    await sdk.startQVACProvider({ firewall: { mode: 'allow', publicKeys: [] } });
+    if (model) {
+      const modelSrc = sdk[model];
+      if (!modelSrc) fail(`the SDK has no model named ${model}`);
+      const modelId = await sdk.loadModel({ modelSrc, modelType: 'llm' });
+      await sdk.unloadModel({ modelId, clearStorage: false });
+    }
+    console.error('ok');
+    process.exit(0);
+  } catch (e: any) {
+    fail(String(e?.message ?? e).split('\n')[0]!);
+  }
+}
+
 const cfg = loadConfig();
 // Wallet source: the engine (seller mode) injects the unlocked wallet via CONDUIT_SELLER_MNEMONIC;
 // the CLI/demo path falls back to the .env dev mnemonic. Account 1 = the seller's earnings address
@@ -235,8 +270,8 @@ swarm.on('connection', (conn: any) => {
       }
       // Deliberately NOT starting the provider here. Starting it is what authorizes a
       // buyer's pubkey through the firewall, and doing that for an unpaid probe would
-      // hand out the grant that payment is supposed to buy. Model health is established
-      // once at startup instead (see preflightModel), before this seller ever advertises.
+      // hand out the grant that payment is supposed to buy. Model health was established
+      // by proveCanServe() before this seller advertised at all.
       console.log('[seller] probe → yes');
       send(conn, { type: 'sessionProbeAck', ok: true });
     } else if (m.type === 'sessionOpen') {
@@ -348,6 +383,72 @@ function clearStaleWorkerLock(): void {
 }
 
 clearStaleWorkerLock();
+
+/**
+ * Prove this machine can serve the model it is about to advertise — by serving it.
+ *
+ * Re-enters this same file in a child process with CONDUIT_SELLER_SELFCHECK=1, which starts
+ * the provider, loads the model, unloads it and exits. The child's exit code is the answer.
+ *
+ * A child is what makes this safe: an inference runtime that cannot link its native addon
+ * kills the process it loads in, and the SDK cannot start a provider twice in one process.
+ * Neither can touch the seller here.
+ *
+ * `process.execArgv` is carried across so the dev path (tsx, which registers a TypeScript
+ * loader through --import) re-enters correctly; packaged, it is empty and argv[1] is the
+ * bundled sell.mjs.
+ */
+async function proveCanServe(model: string): Promise<void> {
+  const { spawn } = await import('node:child_process');
+  console.log(`[seller] proving this machine can serve ${model}…`);
+
+  const result = await new Promise<{ ok: boolean; reason: string; ran: boolean }>((resolve) => {
+    let child;
+    try {
+      child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+        env: { ...process.env, CONDUIT_SELLER_SELFCHECK: '1', CONDUIT_SELFCHECK_MODEL: model },
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+    } catch (e: any) {
+      resolve({ ok: false, ran: false, reason: String(e?.message ?? e) });
+      return;
+    }
+    let err = '';
+    child.stderr?.on('data', (b: Buffer) => { err += b.toString(); });
+    child.on('error', (e) => resolve({ ok: false, ran: false, reason: e.message }));
+
+    // A first run may download weights, so this is generous. A hang is still a failure —
+    // an unbounded wait here is exactly the silence being designed out.
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve({ ok: false, ran: true, reason: 'the check did not finish within 10 minutes' });
+    }, 600_000);
+
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      const last = err.trim().split('\n').filter(Boolean).pop() ?? '';
+      resolve({ ok: code === 0, ran: true, reason: last });
+    });
+  });
+
+  if (result.ok) { console.log(`[seller] ✔ ${model} loads and serves on this machine`); return; }
+
+  if (!result.ran) {
+    // The check itself could not be started. That is not evidence of failure, so it must
+    // not be reported as one — but advertising on an unverified claim is what caused a
+    // buyer to pay for a model that never loaded, so say so loudly.
+    console.warn(`[seller] WARNING: could not run the serve check (${result.reason}).`);
+    console.warn('[seller] going online on an UNVERIFIED capability claim.');
+    return;
+  }
+
+  console.error(`\n[seller] cannot serve ${model}: ${result.reason}`);
+  console.error('[seller] NOT going online — a seller that cannot serve takes buyers\' deposits');
+  console.error('[seller] and returns nothing. Run `npm run bench` to re-measure this machine.\n');
+  process.exit(1);
+}
+
+await proveCanServe(offer.model);
 
 await swarm.join(TOPIC, { server: true, client: false }).flushed();
 console.log(`[seller] online. offer: ${offer.model} @ ${offer.priceBaseUnits} base-units, ~${offer.tps} tps. wallet ${seller.address}`);
