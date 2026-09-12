@@ -157,6 +157,20 @@ export default function MarketplaceScreen({
                 </div>
                 <div className="ms-sub">{fmt(s.price)} USD₮ · {Math.round(s.tps)} tps</div>
                 <div className="ms-addr">{short(s.address)}</div>
+                {s.requireHuman && (
+                  // Advertised by the seller, so a buyer sees the policy BEFORE opening a
+                  // channel rather than paying first and being refused at sessionOpen.
+                  <div
+                    className={`ms-human${state?.human?.verified ? ' ok' : ''}`}
+                    title={
+                      state?.human?.verified
+                        ? 'This seller requires a verified human — your wallet qualifies'
+                        : 'This seller only serves verified humans. Verify from the header to buy here.'
+                    }
+                  >
+                    {state?.human?.verified ? '✓ verified humans only' : '⚠ verified humans only'}
+                  </div>
+                )}
                 {s.network && (
                   <div className={`ms-net${s.sameNetwork === false ? ' other' : ''}`}>
                     {s.sameNetwork === false

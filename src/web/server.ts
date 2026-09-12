@@ -233,7 +233,7 @@ function globalJson(sellerWallet: string) {
   };
 }
 
-function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean; served?: number; failed?: number; successRate?: number; chainId?: number; token?: string }) {
+function offerJson(o: { id: string; sellerWallet: string; model: string; priceBaseUnits: bigint; tps: number; online: boolean; served?: number; failed?: number; successRate?: number; chainId?: number; token?: string; requireHuman?: boolean }) {
   // A seller's offer has always carried chainId + token on the wire, so cross-network
   // sellers were already distinguishable — the UI just never showed it. A buyer settling
   // on Sepolia cannot transact with a seller settling on Arc (different escrow
@@ -242,6 +242,7 @@ function offerJson(o: { id: string; sellerWallet: string; model: string; priceBa
   return {
     id: o.id, address: o.sellerWallet, model: o.model, price: formatUnits(o.priceBaseUnits, DEC), tps: o.tps, online: o.online,
     served: o.served ?? 0, failed: o.failed ?? 0, successRate: o.successRate ?? 0.5,
+    requireHuman: !!o.requireHuman,
     chainId: sellerChain,
     network: labelForChainId(sellerChain),
     sameNetwork: sellerChain === cfg.chainId,

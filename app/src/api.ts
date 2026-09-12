@@ -16,6 +16,8 @@ export interface Peer {
   // not configured or the seller has no on-chain history.
   score?: number;
   global?: GlobalRecord | null;
+  /** This seller only admits World-verified humans. Shown on the card. */
+  requireHuman?: boolean;
   /** Which chain this seller settles on — offers have always carried it on the wire. */
   chainId?: number;
   network?: string;

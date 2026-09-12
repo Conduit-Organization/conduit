@@ -156,7 +156,7 @@ async function verifyReceipt(m: any): Promise<{ ok: boolean; reason?: string }> 
 const swarm = new Hyperswarm();
 swarm.on('connection', (conn: any) => {
   console.log('[seller] buyer connected on storefront');
-  send(conn, { type: 'offer', sellerWallet: seller.address, model: offer.model, priceBaseUnits: String(offer.priceBaseUnits), tps: offer.tps, token: cfg.usdtAddress, chainId: cfg.chainId, ...(escrowDep ? { escrow: escrowDep.address } : {}) });
+  send(conn, { type: 'offer', sellerWallet: seller.address, model: offer.model, priceBaseUnits: String(offer.priceBaseUnits), tps: offer.tps, token: cfg.usdtAddress, chainId: cfg.chainId, ...(escrowDep ? { escrow: escrowDep.address } : {}), requireHuman });
   onMessages(conn, async (m) => {
     if (m.type === 'quoteReq') {
       const balanceBefore = await balanceOrNull();

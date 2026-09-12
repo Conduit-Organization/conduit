@@ -810,6 +810,11 @@ body::after {
 .ms-net { font-family: var(--font-mono); font-size: 10px; color: var(--muted-2); }
 .ms-net.other { color: var(--amber); }
 
+/* A seller's advertised admission policy. Green when you already qualify, amber when you
+   do not — so the card tells you whether you can buy here before you spend anything. */
+.ms-human { font-family: var(--font-mono); font-size: 10px; color: var(--amber); }
+.ms-human.ok { color: var(--mint); }
+
 /* --- ETHOnline 2026: a seller's refusal, rendered as a decision not a crash -- */
 .refusal { border-left: 2px solid var(--amber); padding: 2px 0 2px 11px; }
 .rf-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

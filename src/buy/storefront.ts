@@ -15,6 +15,11 @@ import type { ConduitAccount } from '../core/wallet';
 
 const TOPIC = crypto.createHash('sha256').update('conduit:market:v1').digest();
 
+/** How often to re-announce interest in the market topic, so late sellers are found. */
+const REDISCOVER_MS = 10_000;
+/** Drop an offline seller from the list after this long, so ghosts do not pile up. */
+const STALE_OFFER_MS = 90_000;
+
 export interface SellerOffer {
   id: string; // storefront peer key (hex) — stable marketplace id
   sellerWallet: string;
@@ -24,6 +29,8 @@ export interface SellerOffer {
   token: string;
   chainId: number;
   escrow?: string; // escrow contract address, if this seller accepts payment-channel sessions
+  /** This seller only admits World-verified humans. Advertised in the offer. */
+  requireHuman?: boolean;
   online: boolean;
   lastSeen: number;
   // first-party reputation (this buyer's own experience with the seller):
@@ -152,6 +159,7 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
         token: m.token,
         chainId: m.chainId,
         escrow: m.escrow,
+        requireHuman: m.requireHuman,
         online: true,
         lastSeen: Date.now(),
         served: rep?.served ?? 0,
@@ -179,14 +187,30 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     conns.set(id, rec);
     onMessages(conn, (m) => handle(rec, m));
     conn.on('close', () => {
-      if (rec.offer) rec.offer.online = false;
+      if (rec.offer) { rec.offer.online = false; rec.offer.lastSeen = Date.now(); }
       for (const [k, p] of rec.pending) { rec.pending.delete(k); p.reject(new Error('seller disconnected')); }
     });
     conn.on('error', () => {});
   });
 
-  await swarm.join(TOPIC, { server: false, client: true }).flushed();
+  // Active re-discovery. A buyer that has been running for a while would not notice a
+  // seller that came online AFTER it joined — the DHT announcement had already passed —
+  // so the seller only appeared if you restarted the app. Refreshing the topic on a timer
+  // closes that gap. (Known since June: "persistent-buyer rediscovery lag" in
+  // docs/PRODUCT-PLAN.md.)
+  const discovery = swarm.join(TOPIC, { server: false, client: true });
+  await discovery.flushed();
   log('[storefront] searching for sellers…');
+
+  const rediscover = setInterval(() => {
+    discovery.refresh().catch(() => { /* transient DHT churn — try again next tick */ });
+    // Drop peers that have been gone a long time so the marketplace does not accumulate
+    // ghosts. A seller that returns arrives on a fresh connection with a new peer key.
+    const cutoff = Date.now() - STALE_OFFER_MS;
+    for (const [id, c] of conns) {
+      if (c.offer && !c.offer.online && c.offer.lastSeen < cutoff) conns.delete(id);
+    }
+  }, REDISCOVER_MS);
 
   function waitFor(rec: ConnRec, kind: string, ms: number): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -381,6 +405,7 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       }
     },
     async close() {
+      clearInterval(rediscover);
       try { swarm.destroy(); } catch {}
     },
   };

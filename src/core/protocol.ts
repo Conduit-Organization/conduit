@@ -4,7 +4,10 @@ import type { HumanProof } from './humanity';
 
 export type Msg =
   // ── per-inference settlement (M1–M3): one on-chain payment per escalation ──
-  | { type: 'offer'; sellerWallet: string; model: string; priceBaseUnits: string; tps: number; token: string; chainId: number; escrow?: string }
+  // `requireHuman` (ETHOnline 2026): this seller only admits buyers backed by a verified
+  // unique human. Advertised so a buyer can see the policy BEFORE opening a channel,
+  // rather than paying first and being refused at sessionOpen.
+  | { type: 'offer'; sellerWallet: string; model: string; priceBaseUnits: string; tps: number; token: string; chainId: number; escrow?: string; requireHuman?: boolean }
   | { type: 'quoteReq'; buyerConsumerPub: string; buyerWallet: string }
   | { type: 'quote'; price: string; sellerWallet: string; nonce: string; token: string; chainId: number }
   | { type: 'receipt'; nonce: string; txHash: string; buyerConsumerPub: string; buyerWallet: string; signature: string }
