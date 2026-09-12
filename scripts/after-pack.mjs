@@ -141,8 +141,15 @@ async function vendorOpensslForMac(appOut) {
         // The dylib records its own install name; leave it resolvable next to the addon.
         await run('install_name_tool', ['-id', `@loader_path/${lib}`, dest]).catch(() => {});
         await run('install_name_tool', ['-change', `${BREW_OPENSSL}/${lib}`, `@loader_path/${lib}`, bin]);
+        // Re-sign the dylib we just rewrote. install_name_tool edits the Mach-O in place,
+        // which invalidates whatever signature it carried.
+        await run('codesign', ['--force', '--sign', '-', '--timestamp=none', dest]).catch(() => {});
       }
-      console.log(`      vendored OpenSSL beside ${path.relative(appOut, bin)}`);
+      // And the addon itself, for the same reason. On Apple Silicon every Mach-O must carry
+      // a valid signature — ad-hoc is enough — or dlopen refuses it outright, which would
+      // trade a missing-library failure for a code-signature one.
+      await run('codesign', ['--force', '--sign', '-', '--timestamp=none', bin]);
+      console.log(`      vendored OpenSSL beside ${path.relative(appOut, bin)} (re-signed)`);
     } catch (e) {
       console.warn(`  • afterPack: could not rewrite ${path.relative(appOut, bin)}: ${e.message}`);
     }

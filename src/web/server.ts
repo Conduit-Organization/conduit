@@ -37,6 +37,10 @@ const { createSellerManager } = await import('./seller');
 const { createHumanityRegistrar } = await import('./humanity-register');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
+const { recoverWorkerLock } = await import('../core/worker-lock');
+// Before the SDK is touched at all: a lock left by a killed run makes the worker
+// unstartable, and the only symptom is a 30-second RPC timeout deep inside a purchase.
+recoverWorkerLock('[engine]');
 const sdk: any = await import('@qvac/sdk');
 
 const here = path.dirname(fileURLToPath(import.meta.url));

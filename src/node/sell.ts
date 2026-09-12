@@ -4,6 +4,7 @@
 // quote (single-use nonce) → verify a signed, on-chain-confirmed payment → open a firewall-gated
 // QVAC provider for exactly that buyer → grant the provider pubkey. No orchestrator.
 import crypto from 'node:crypto';
+import { recoverWorkerLock } from '../core/worker-lock';
 import { profileForThisMachine } from '../core/bench-profile';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -374,48 +375,7 @@ swarm.on('connection', (conn: any) => {
   });
 });
 
-/**
- * Clear a worker lock left behind by a killed run.
- *
- * QVAC serialises access to its bare worker with `~/.qvac/.worker.lock`, which records the
- * owning pid. A process killed hard (or an Electron shell torn down) leaves that file
- * behind, and the next provider start then waits on a worker that will never appear. The
- * seller shows no symptom at all: it announces, quotes, and passes every economic check,
- * and the buyer discovers the problem only after paying — which is exactly what happened.
- *
- * A lock naming a pid that is gone is garbage, and removing it is safe. A lock naming a
- * LIVE process is not ours to touch: another Conduit is running on this machine, and
- * saying so is more useful than silently fighting it for the worker.
- *
- * Deliberately NOT verifying the model itself here. Doing that means starting the provider,
- * and this SDK does not survive a stop/start cycle in one process — the second start never
- * returns — so a "health check" written that way would leave the seller permanently unable
- * to serve. `npm run seller-check` does that check in a throwaway process instead.
- */
-function clearStaleWorkerLock(): void {
-  const lockPath = path.join(os.homedir(), '.qvac', '.worker.lock');
-  let raw: string;
-  try { raw = readFileSync(lockPath, 'utf8'); }
-  catch { return; } // no lock — nothing to do
-
-  let pid: number | undefined;
-  try { pid = JSON.parse(raw)?.pid; } catch { /* unparseable → treat as stale */ }
-
-  if (typeof pid === 'number') {
-    try {
-      process.kill(pid, 0); // throws iff the process is gone
-      console.log(`[seller] note: QVAC worker lock is held by a live process (pid ${pid}).`);
-      console.log('[seller] another Conduit is probably running here; they will share the worker.');
-      return;
-    } catch { /* not running → the lock is stale */ }
-  }
-  try {
-    unlinkSync(lockPath);
-    console.log(`[seller] cleared a stale QVAC worker lock (pid ${pid ?? 'unknown'} is gone)`);
-  } catch { /* raced with someone else clearing it — fine */ }
-}
-
-clearStaleWorkerLock();
+recoverWorkerLock('[seller]');
 
 /**
  * Prove this machine can serve the model it is about to advertise — by serving it.
