@@ -32,6 +32,7 @@ const AGENT_BOOK_ADDRESS = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA';
 const { reliability, globalScore } = await import('../core/qualification');
 const { labelForChainId, sameSettlementNetwork } = await import('../core/networks');
 const { profileForThisMachine } = await import('../core/bench-profile');
+const { checkLocalRuntime } = await import('../core/runtime-check');
 const { createSellerManager } = await import('./seller');
 const { createHumanityRegistrar } = await import('./humanity-register');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
@@ -126,6 +127,23 @@ async function preflightEscrow(): Promise<void> {
   }
 }
 void preflightEscrow();
+
+// Local inference runtime preflight — can this machine receive a delegated answer?
+//
+// The buyer never loads a model itself, but the delegated call still runs through this
+// machine's runtime. A Mac whose native addon could not link failed thirty seconds into a
+// purchase, after paying. Asking at startup turns that into a line in the log and a visible
+// state, before anyone types a question.
+let runtimeStatus: { ok: boolean | null; reason?: string } = { ok: null };
+async function preflightRuntime(): Promise<void> {
+  const r = await checkLocalRuntime(sdk);
+  runtimeStatus = r;
+  if (r.ok) { console.log('[runtime] local inference runtime ok'); return; }
+  console.error(`[runtime] PREFLIGHT FAILED — ${r.reason}`);
+  console.error('[runtime] answers cannot be delivered on this machine; purchases will be refused');
+  console.error('[runtime] before any payment is made.');
+}
+void preflightRuntime();
 // ── ETHOnline 2026 ─────────────────────────────────────────────────────────────
 // First-party reputation (what I myself experienced) is unchanged and still the
 // authority once it has evidence. The Graph layer wraps it to fill the cold-start hole:
@@ -379,6 +397,10 @@ function integrationsJson() {
       escrowUrl: escrowDep ? `${cfg.network.explorer}/address/${escrowDep.address}` : null,
       // null = not checked yet or inconclusive; the UI says nothing in that case.
       escrowVerified: escrowReady ? escrowReady.ok : null,
+      // This machine's own ability to receive a delegated answer. Not an Arc fact, but it
+      // belongs where a buyer looks before spending.
+      runtimeOk: runtimeStatus.ok,
+      runtimeError: runtimeStatus.reason ?? null,
       escrowError: escrowReady?.reason ?? null,
     },
     graph: {

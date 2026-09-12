@@ -10,6 +10,7 @@ import { Wallet as EthWallet, JsonRpcProvider, formatUnits } from 'ethers';
 import { send, onMessages, bindMessage, type Msg } from '../core/protocol';
 import { createEscrowClient, type EscrowClient } from '../core/escrow';
 import { sameSettlementNetwork } from '../core/networks';
+import { checkLocalRuntime, cannotReceiveMessage } from '../core/runtime-check';
 import type { Reputation } from '../core/reputation';
 import type { Humanity, HumanProof } from '../core/humanity';
 import type { ConduitAccount } from '../core/wallet';
@@ -296,6 +297,27 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     }
   }
 
+  /**
+   * Refuse to spend anything if this machine cannot receive an answer.
+   *
+   * A buyer delegates inference to the seller's GPU, but the delegated call still runs
+   * through this machine's own inference runtime. When that runtime cannot start, the
+   * purchase fails AFTER the voucher is signed — the buyer pays and gets nothing, and the
+   * seller did nothing wrong. The question costs one heartbeat and is answerable before a
+   * single unit moves.
+   *
+   * Cached once it succeeds: a runtime that has answered does not need re-asking every
+   * inference. A failure is not cached, so fixing the machine does not require a restart.
+   */
+  let runtimeOk = false;
+  async function requireLocalRuntime(): Promise<void> {
+    if (runtimeOk) return;
+    const r = await checkLocalRuntime(deps.sdk);
+    if (r.ok) { runtimeOk = true; return; }
+    log(`[storefront] local inference runtime unavailable: ${r.reason}`);
+    throw new Error(cannotReceiveMessage(r.reason, deps.symbol));
+  }
+
   async function ensureSession(rec: ConnRec, offer: SellerOffer): Promise<SessionState> {
     const key = offer.sellerWallet.toLowerCase();
     // small safety margin so we never start a draw against a channel that expires moments later
@@ -320,6 +342,10 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       await esc.withdraw(escrowWallet, offer.sellerWallet);
       ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
     }
+
+    // Before asking anyone for anything: can we even receive an answer? A channel opened by
+    // a machine that cannot run the delegated call is money locked for nothing.
+    await requireLocalRuntime();
 
     // Ask before committing anything. Every reason a seller might refuse — its policy on
     // human proofs, this buyer's abandonment record — is knowable before a single unit
@@ -414,6 +440,10 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       // a plain refusal — and the running total has to be rolled back, because leaving it
       // raised would make the NEXT voucher jump by two inferences' worth and pay for the
       // failure twice.
+      // A cached session skips ensureSession entirely, so the gate is repeated here. It is a
+      // no-op once the runtime has answered.
+      await requireLocalRuntime();
+
       const owedBefore = sess.cumulative;
       sess.cumulative += price; // running total owed
       const sig = await esc.signVoucher(escrowWallet, seller.sellerWallet, sess.epoch, sess.cumulative);

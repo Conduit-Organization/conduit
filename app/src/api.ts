@@ -55,6 +55,8 @@ export interface Integrations {
     explorer: string;
     escrowUrl: string | null;
     escrowVerified?: boolean | null;
+    runtimeOk?: boolean | null;
+    runtimeError?: string | null;
     escrowError?: string | null;
   };
   graph: GraphStatus & { endpoint: string | null; network: string | null };

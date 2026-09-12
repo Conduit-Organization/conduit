@@ -48,6 +48,14 @@ export default function Integrations({ state }: { state: State | null }) {
               Escrow unreachable — {i.arc.escrowError}. Purchases will fail until this is fixed.
             </p>
           )}
+          {/* Not an Arc fact, but it belongs where a buyer looks before spending: a machine
+              that cannot run the delegated call cannot receive what it would be paying for. */}
+          {i.arc.runtimeOk === false && (
+            <p className="ig-bad">
+              This machine's inference runtime will not start, so answers cannot be delivered
+              here. Purchases are refused before any payment. ({i.arc.runtimeError})
+            </p>
+          )}
         </div>
 
         {/* ── The Graph: the record a buyer reads before choosing ───────── */}
