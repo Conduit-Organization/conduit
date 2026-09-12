@@ -55,9 +55,13 @@ function Stamp({ r }: { r: AskResult }) {
 }
 
 function Telemetry({ r }: { r: AskResult }) {
+  // The confidence figure comes from the on-device router sampling itself. In always-pay
+  // mode that router never runs, so consistency is 0 — showing "confidence 0.00" would be
+  // reporting a measurement that was never taken. Omit it unless it means something.
+  const hasConfidence = r.consistency > 0;
   return (
     <div className="telemetry">
-      <span>confidence <b>{r.consistency.toFixed(2)}</b></span>
+      {hasConfidence && <span>confidence <b>{r.consistency.toFixed(2)}</b></span>}
       {r.source === 'paid' && r.stats.tps ? (
         <span><b>{Math.round(r.stats.tps)}</b> tok/s</span>
       ) : null}
