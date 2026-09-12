@@ -57,20 +57,39 @@ const ANSI = /\[[0-9;]*m/g;
 const URL_RE = /https:\/\/world\.org\/verify\?\S+/;
 const TX_RE = /(0x[0-9a-fA-F]{64})/;
 
+/** How much child output to retain for diagnosis when a registration fails. */
+const OUTPUT_TAIL = 40;
+
 export function createHumanityRegistrar(deps: { log?: (m: string) => void } = {}): HumanityRegistrar {
   const log = deps.log ?? (() => {});
   let child: ChildProcess | null = null;
+  // Ring buffer of everything the child said. Without this a failure surfaces only as
+  // "exit 1" and the real cause — a missing module, a network error — is lost, which is
+  // exactly how a pruned dependency went unnoticed until someone installed a build.
+  let recent: string[] = [];
   let st: RegisterStatus = {
     phase: 'idle', address: null, url: null, txHash: null, error: null, startedAt: null,
   };
 
   function reset(address: string) {
     st = { phase: 'starting', address, url: null, txHash: null, error: null, startedAt: Date.now() };
+    recent = [];
+  }
+
+  /** The most useful-looking lines from the child, for an error message. */
+  function tail(): string {
+    const lines = recent.filter((l) => l.trim().length > 0);
+    const notable = lines.filter((l) => /error|cannot find|not found|failed|refused|ENOENT|MODULE/i.test(l));
+    return (notable.length ? notable : lines).slice(-3).join(' · ').slice(0, 300);
   }
 
   function handleLine(raw: string) {
     const line = raw.replace(ANSI, '');
     const trimmed = line.trim();
+    if (trimmed) {
+      recent.push(trimmed);
+      if (recent.length > OUTPUT_TAIL) recent.shift();
+    }
 
     const url = URL_RE.exec(trimmed);
     if (url) {
@@ -137,11 +156,18 @@ export function createHumanityRegistrar(deps: { log?: (m: string) => void } = {}
       });
       proc.on('exit', (code) => {
         child = null;
-        // A clean exit that never reached 'done' means the CLI gave up — most often the
-        // verification window expired without a scan.
         if (st.phase !== 'done' && st.phase !== 'error') {
           st.phase = 'error';
-          st.error = code === 0 ? 'verification did not complete' : `registration failed (exit ${code})`;
+          const why = tail();
+          // Say WHAT went wrong, not just that something did. A clean exit that never
+          // reached 'done' usually means the verification window expired unscanned.
+          st.error = code === 0
+            ? 'verification did not complete' + (why ? ` — ${why}` : '')
+            : `registration failed (exit ${code})` + (why ? ` — ${why}` : '');
+        }
+        if (st.phase === 'error') {
+          // Always put the full tail in the engine log, however the UI renders it.
+          log(`[humanity] registration failed:\n    ${recent.slice(-OUTPUT_TAIL).join('\n    ')}`);
         }
       });
       return st;

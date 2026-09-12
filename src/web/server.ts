@@ -261,6 +261,15 @@ const HUMAN_SELF_TTL = 5 * 60 * 1000;
 
 async function refreshHumanSelf(): Promise<void> {
   if (!humanity || !buyer) return;
+  // A registration that just succeeded must not wait out the cache. Checking the
+  // registrar here means /api/state alone is enough to flip the header — the UI does not
+  // have to still be polling the registration endpoint for that to happen.
+  const reg = registrar.status();
+  const justRegistered =
+    reg.phase === 'done' &&
+    reg.address?.toLowerCase() === buyer.address.toLowerCase() &&
+    humanSelf?.verified === false;
+  if (justRegistered) humanSelf = null;
   if (humanSelf && Date.now() - humanSelf.at < HUMAN_SELF_TTL) return;
   try {
     const id = await humanity.humanId(buyer.address);

@@ -314,13 +314,55 @@ The buyer wallet needs **both**:
 ## Running it
 
 ### Desktop app (easiest)
-Download the installer for your OS from [Releases](https://github.com/Conduit-Organization/conduit/releases)
-(Linux `.AppImage` / `.deb` available; macOS & Windows coming). It bundles the engine, wallet, and UI;
-escrow is on by default. Or build from source:
+Download the installer for your OS from [Releases](https://github.com/Conduit-Organization/conduit/releases).
+It bundles the engine, wallet, and UI; escrow is on by default. Or build from source:
 
 ```bash
 npm run dist        # builds the Electron app → release/
 ```
+
+The build is large (~1.6 GB) because the on-device AI runtime and its model backends are
+bundled. On first launch the app downloads its models into `~/.qvac` (~3 GB).
+
+macOS and Windows builds must be produced **on** those platforms — a DMG needs macOS's
+`hdiutil`, so it cannot be cross-built from Linux.
+
+#### Platform notes
+
+**Install before running (macOS).** Drag `Conduit.app` to `/Applications` first. Launching
+it directly from the mounted DMG fails:
+
+```
+Error: EROFS: read-only file system, chmod '.../bare-runtime-darwin-arm64/bin/bare'
+```
+
+The engine makes its runtime binary executable at startup, which a read-only DMG volume
+cannot allow.
+
+**macOS also needs OpenSSL 3.** The vendor's `darwin-arm64` prebuilds for the inference
+engine (`@qvac/llm-llamacpp`, `@qvac/embed-llamacpp`) link against absolute Homebrew
+paths:
+
+```
+/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib
+/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib
+```
+
+Without them `dlopen` fails, the model worker never starts, and the UI shows a worker
+timeout. Install them with:
+
+```bash
+brew install openssl@3
+```
+
+This is an upstream packaging issue in the prebuilt binary, not in Conduit — only 2 of
+the 12 QVAC prebuilds are affected, and the `linux-x64` prebuilds link by normal soname,
+which is why Linux is unaffected. Settlement, reputation and the World gate all work
+regardless; it is local *inference* that needs the libraries.
+
+**Unsigned builds.** Releases are not code-signed. macOS Gatekeeper reports "damaged and
+can't be opened" — right-click the app and choose **Open** once. Windows SmartScreen
+shows a similar warning.
 
 ### Headline demo (single machine)
 ```bash
