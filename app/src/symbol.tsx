@@ -15,19 +15,25 @@ import { createContext, useContext } from 'react';
  */
 const SymbolContext = createContext<string>('USDC');
 const NetworkLabelContext = createContext<string>('this network');
+// Explorer base URL for the settlement network, so a tx hash can be made clickable.
+const ExplorerContext = createContext<string>('');
 
 export function SymbolProvider({
   value,
   network,
+  explorer,
   children,
 }: {
   value: string | undefined;
   network?: string | undefined;
+  explorer?: string | undefined;
   children: React.ReactNode;
 }) {
   return (
     <SymbolContext.Provider value={value ?? 'USDC'}>
-      <NetworkLabelContext.Provider value={network ?? 'this network'}>{children}</NetworkLabelContext.Provider>
+      <NetworkLabelContext.Provider value={network ?? 'this network'}>
+        <ExplorerContext.Provider value={explorer ?? ''}>{children}</ExplorerContext.Provider>
+      </NetworkLabelContext.Provider>
     </SymbolContext.Provider>
   );
 }
@@ -40,4 +46,9 @@ export function useSymbol(): string {
 /** The human name of the settlement network ("Arc Testnet"). */
 export function useNetworkLabel(): string {
   return useContext(NetworkLabelContext);
+}
+
+/** Explorer base URL for the settlement network (empty when unknown). */
+export function useExplorer(): string {
+  return useContext(ExplorerContext);
 }

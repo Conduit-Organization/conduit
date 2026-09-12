@@ -207,6 +207,7 @@ async function claimAll(): Promise<void> {
       const tx = await esc.claim(escrowWallet, buyerWallet, target, sig);
       s.claimed = target;
       console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`);
+      console.log(`[seller] claim-tx ${tx}`);
     } catch (e: any) {
       // Say why. The usual cause is no gas, and on Arc that is the same asset being earned.
       console.log('[seller] claim-now failed:', e?.shortMessage ?? e?.message ?? e);
@@ -224,7 +225,14 @@ function maybeClaim(buyerWallet: string) {
   s.claiming = true;
   const target = s.cumulative, sig = s.lastSig;
   esc.claim(escrowWallet, buyerWallet, target, sig)
-    .then((tx) => { s.claimed = target; console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`); emitPending(); })
+    .then((tx) => {
+      s.claimed = target;
+      console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`);
+      // Full hash on its own line for the engine to pick up — the seller screen turns it
+      // into an explorer link, which is the only way a seller can check its own settlement.
+      console.log(`[seller] claim-tx ${tx}`);
+      emitPending();
+    })
     .catch((e: any) => console.log('[seller] claim failed (will retry):', e?.message ?? e))
     .finally(() => { s.claiming = false; });
 }

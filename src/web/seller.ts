@@ -18,6 +18,7 @@ export interface SellerStatus {
   requestsServed: number;
   earned: string | null; // base units owed for answers served this session (served × price)
   pending: string | null; // of that, still unredeemed as signed vouchers
+  lastClaimTx: string | null; // tx hash of the most recent on-chain settlement
   startedAt: number | null;
   error: string | null;
   /**
@@ -80,12 +81,12 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
 
   const st: SellerStatus = {
     running: false, online: false, model: null, price: null, tps: null,
-    address: null, requestsServed: 0, earned: null, pending: null, startedAt: null, error: null, requireHuman: false,
+    address: null, requestsServed: 0, earned: null, pending: null, lastClaimTx: null, startedAt: null, error: null, requireHuman: false,
   };
 
   function reset() {
     st.running = false; st.online = false; st.model = null; st.price = null; st.tps = null;
-    st.address = null; st.requestsServed = 0; st.earned = null; st.pending = null; st.startedAt = null;
+    st.address = null; st.requestsServed = 0; st.earned = null; st.pending = null; st.lastClaimTx = null; st.startedAt = null;
     earnings = null; earnedAtStart = null; earnedNow = null; pendingBaseUnits = 0n;
   }
 
@@ -117,6 +118,10 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
       log(`[seller-mgr] online: ${st.model} @ ${st.price} (~${st.tps} tps) → ${st.address}`);
     }
     // Unclaimed-earnings beacon from the seller child (base units) — surfaces money owed before claim.
+    // The hash of the most recent on-chain settlement, so the seller screen can link to it.
+    const ct = /claim-tx\s+(0x[0-9a-fA-F]{64})/.exec(line);
+    if (ct) { st.lastClaimTx = ct[1]!; }
+
     const pe = /earned-pending\s+(\d+)/.exec(line);
     if (pe) {
       pendingBaseUnits = BigInt(pe[1]!);

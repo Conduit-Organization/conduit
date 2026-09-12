@@ -164,6 +164,7 @@ export interface SellerStatus {
   requestsServed: number;
   earned: string | null; // base units owed for answers served this session (served × price)
   pending?: string | null; // of that, still unredeemed as signed vouchers
+  lastClaimTx?: string | null; // tx hash of the most recent on-chain settlement
   startedAt: number | null;
   error: string | null;
   /** ETHOnline 2026 — this seller only admits World-verified humans. Seller policy. */

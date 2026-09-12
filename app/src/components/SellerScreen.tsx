@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSymbol, useNetworkLabel } from '../symbol';
+import { useSymbol, useNetworkLabel, useExplorer } from '../symbol';
 import { getSellerProfile, claimSellerEarnings, type SellerStatus, type SellerProfile } from '../api';
 import { Gpu } from './icons';
 import { short, modelName } from '../format';
@@ -37,6 +37,7 @@ export default function SellerScreen({
     finally { setTimeout(() => setClaiming(false), 4000); }
   }, []);
   const netLabel = useNetworkLabel();
+  const explorer = useExplorer();
   const [profile, setProfile] = useState<SellerProfile | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   // Seller POLICY, not a product rule: some sellers will sell to any funded keypair,
@@ -232,6 +233,18 @@ export default function SellerScreen({
           </div>
         )}
         {claimErr && <div className="ss-claim-err">{claimErr}</div>}
+
+        {/* Where the money actually landed. Without this the claim button is an act of
+            faith: the row disappears and nothing tells you a transaction happened, let
+            alone how to check it. */}
+        {status?.lastClaimTx && (
+          <div className="ss-settled">
+            ✓ settled on-chain ·{' '}
+            {explorer
+              ? <a href={`${explorer}/tx/${status.lastClaimTx}`} target="_blank" rel="noreferrer">view transaction ↗</a>
+              : <code>{status.lastClaimTx.slice(0, 18)}…</code>}
+          </div>
+        )}
 
         <div className="ss-note">
           Earnings land in account #1 of your wallet ({short(status?.address ?? null)}). Buyers pay this
