@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSymbol } from '../symbol';
 import type { State, Peer } from '../api';
 import { Mark, Lock } from './icons';
 import Marketplace from './Marketplace';
@@ -24,6 +25,7 @@ export default function Rail({
   onSelect: (id: string) => void;
   onManage: () => void;
 }) {
+  const sym = useSymbol();
   const [copied, setCopied] = useState(false);
 
   const spent = Number(state?.spent ?? 0);
@@ -45,7 +47,7 @@ export default function Rail({
           <Mark size={30} />
           <div>
             <div className="wordmark">Conduit</div>
-            <div className="tag">P2P inference · USD₮</div>
+            <div className="tag">P2P inference · {sym}</div>
           </div>
         </div>
 
@@ -56,7 +58,7 @@ export default function Rail({
           </div>
           <div className="balance">
             <span className={`num${flash ? ' flash' : ''}`}>{fmt(state?.buyer?.usdt)}</span>
-            <span className="unit">USD₮</span>
+            <span className="unit">{sym}</span>
           </div>
           <div className="addr" onClick={copy} title="Copy address">
             {short(state?.buyer?.address ?? '')}
@@ -68,7 +70,7 @@ export default function Rail({
           </div>
           {state?.sessions && state.sessions.length > 0 && (
             <div className="channel-chip" title="Open payment channel — paid answers are instant (off-chain vouchers)">
-              ⚡ channel · {fmt(state.sessions[0]!.remaining)} USD₮ left
+              ⚡ channel · {fmt(state.sessions[0]!.remaining)} {sym} left
             </div>
           )}
         </section>
@@ -79,7 +81,7 @@ export default function Rail({
             <span>{Math.round(pct)}%</span>
           </div>
           <div className="spend-row">
-            <span className="big">{fmt(spent)} USD₮</span>
+            <span className="big">{fmt(spent)} {sym}</span>
             <span className="of">of {fmt(budget)} budget</span>
           </div>
           <div className="meter">

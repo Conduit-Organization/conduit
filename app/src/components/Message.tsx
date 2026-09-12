@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useSymbol } from '../symbol';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMsg } from '../types';
@@ -15,6 +16,7 @@ function usdt(v: string | number): string {
 }
 
 function Stamp({ r }: { r: AskResult }) {
+  const sym = useSymbol();
   if (r.source === 'paid') {
     return (
       <motion.span
@@ -23,7 +25,7 @@ function Stamp({ r }: { r: AskResult }) {
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 520, damping: 22 }}
       >
-        <Coin /> Peer GPU · paid {usdt(r.cost)} USD₮
+        <Coin /> Peer GPU · paid {usdt(r.cost)} {sym}
       </motion.span>
     );
   }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSymbol } from '../symbol';
 import type { State, Peer, GlobalRecord } from '../api';
 import { Star } from './icons';
 import { fmt, short, modelName } from '../format';
@@ -22,6 +23,7 @@ export default function MarketplaceScreen({
   sellers: Peer[];
   onPick: (id: string) => void; // select the seller (or 'auto') AND enter chat
 }) {
+  const sym = useSymbol();
   const [marks, setMarks] = useState<bm.Bookmark[]>([]);
   useEffect(() => { setMarks(bm.load()); }, []);
 
@@ -89,7 +91,7 @@ export default function MarketplaceScreen({
                     </span>
                   </div>
                   <div className="ms-sub">
-                    {fmt(live?.price ?? b.price)} USD₮{live ? ` · ${Math.round(live.tps)} tps` : ''}
+                    {fmt(live?.price ?? b.price)} {sym}{live ? ` · ${Math.round(live.tps)} tps` : ''}
                   </div>
                   <div className="ms-addr">{short(b.address)}</div>
                   <div className={`ms-state${isOnline ? ' on' : ''}`}>{isOnline ? 'online — tap to use' : 'offline'}</div>
@@ -156,7 +158,7 @@ export default function MarketplaceScreen({
                     <Star filled={marked} />
                   </span>
                 </div>
-                <div className="ms-sub">{fmt(s.price)} USD₮ · {Math.round(s.tps)} tps</div>
+                <div className="ms-sub">{fmt(s.price)} {sym} · {Math.round(s.tps)} tps</div>
                 <div className="ms-addr">{short(s.address)}</div>
                 {s.requireHuman && (
                   // Advertised by the seller, so a buyer sees the policy BEFORE opening a

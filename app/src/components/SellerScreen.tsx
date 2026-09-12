@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSymbol } from '../symbol';
 import { getSellerProfile, type SellerStatus, type SellerProfile } from '../api';
 import { Gpu } from './icons';
 import { short, modelName } from '../format';
@@ -23,6 +24,7 @@ export default function SellerScreen({
   onStart: (model?: string, requireHuman?: boolean) => void;
   onStop: () => void;
 }) {
+  const sym = useSymbol();
   const [profile, setProfile] = useState<SellerProfile | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   // Seller POLICY, not a product rule: some sellers will sell to any funded keypair,
@@ -64,7 +66,7 @@ export default function SellerScreen({
         <h1>Share your GPU &amp; Earn</h1>
         <p>
           Sell inference to peers over an <b>end-to-end encrypted</b> link. A buyer pays you in{' '}
-          <span className="pay">USD₮ per answer</span> — the settled payment is the access handshake. Weights
+          <span className="pay">{sym} per answer</span> — the settled payment is the access handshake. Weights
           never leave this machine.
         </p>
       </div>
@@ -83,7 +85,7 @@ export default function SellerScreen({
             </div>
             <div className="so-cell">
               <div className="so-k">Price / answer</div>
-              <div className="so-v mint">{price} USD₮</div>
+              <div className="so-v mint">{price} {sym}</div>
             </div>
             <div className="so-cell">
               <div className="so-k">Speed</div>
@@ -116,7 +118,7 @@ export default function SellerScreen({
                     <span className="mp-name"><Gpu /> {modelName(m.id)}{isRec && <span className="mp-rec">★ recommended</span>}</span>
                     <span className="mp-check">{isSel ? '✓' : ''}</span>
                   </span>
-                  <span className="mp-sub">{m.price} USD₮ / answer · {m.tps != null ? `~${Math.round(m.tps)} tps` : '—'}</span>
+                  <span className="mp-sub">{m.price} {sym} / answer · {m.tps != null ? `~${Math.round(m.tps)} tps` : '—'}</span>
                 </button>
               );
             })}
@@ -190,7 +192,7 @@ export default function SellerScreen({
           </div>
           <div className="ss-cell">
             <div className="ss-num mint">{usdtFromBaseUnits(status?.earned ?? null)}</div>
-            <div className="ss-k">USD₮ earned</div>
+            <div className="ss-k">{sym} earned</div>
           </div>
           <div className="ss-cell">
             <div className="ss-num small">{short(status?.address ?? null)}</div>

@@ -1,13 +1,25 @@
 import { useState } from 'react';
-import { exportWallet, lockWallet } from '../api';
+import { exportWallet, lockWallet, type State } from '../api';
 
-const FAUCETS = [
+// Funding instructions have to follow the network, not a memory of one.
+//
+// This panel used to send everyone to a Sepolia ETH faucet and a Pimlico USD₮ tap. On Arc
+// that advice is actively wrong: the settlement token IS the gas token, so there is one
+// asset to obtain from one faucet, and following the old links funds a chain the app is
+// not even talking to.
+const SEPOLIA_FAUCETS = [
   { label: 'Sepolia ETH (gas) — pk910 PoW faucet', url: 'https://sepolia-faucet.pk910.de/' },
   { label: 'Sepolia ETH — Google Cloud faucet', url: 'https://cloud.google.com/application/web3/faucet/ethereum/sepolia' },
   { label: 'Test USD₮ — Pimlico faucet', url: 'https://faucet.pimlico.io/' },
 ];
 
-export default function WalletMenu({ address, onClose, onLocked }: { address: string; onClose: () => void; onLocked: () => void }) {
+export default function WalletMenu({ address, state, onClose, onLocked }: { address: string; state: State | null; onClose: () => void; onLocked: () => void }) {
+  const net = state?.network;
+  const sym = net?.symbol ?? 'USDC';
+  const oneAsset = net?.gasIsSettlementToken !== false;
+  const faucets = net?.faucet
+    ? [{ label: `${sym} — ${net.label} faucet`, url: net.faucet }]
+    : SEPOLIA_FAUCETS;
   const [tab, setTab] = useState<'fund' | 'export'>('fund');
   const [copied, setCopied] = useState(false);
   const [pw, setPw] = useState('');
@@ -52,10 +64,14 @@ export default function WalletMenu({ address, onClose, onLocked }: { address: st
 
         {tab === 'fund' && (
           <div className="modal-body">
-            <p className="gate-sub">This is a <b>testnet</b> wallet. Send test funds to your address above:
-              you’ll need a little <b>Sepolia ETH</b> for gas and some <b>test USD₮</b> to pay peers.</p>
+            <p className="gate-sub">
+              This is a <b>testnet</b> wallet. Send test funds to your address above:{' '}
+              {oneAsset
+                ? <>on <b>{net?.label ?? 'this network'}</b>, <b>{sym}</b> is both the gas token and what you pay peers with — so one balance covers everything.</>
+                : <>you’ll need a little <b>gas</b> for transactions and some <b>{sym}</b> to pay peers.</>}
+            </p>
             <div className="faucets">
-              {FAUCETS.map((f) => (
+              {faucets.map((f) => (
                 <a className="faucet" key={f.url} href={f.url} target="_blank" rel="noreferrer">{f.label} ↗</a>
               ))}
             </div>

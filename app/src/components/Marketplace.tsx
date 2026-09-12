@@ -1,4 +1,5 @@
 import type { State, Peer } from '../api';
+import { useSymbol } from '../symbol';
 
 function fmt(n: string | number, dp = 2): string {
   const v = Number(n);
@@ -27,6 +28,7 @@ export default function Marketplace({
   sellers: Peer[];
   onSelect: (id: string) => void;
 }) {
+  const sym = useSymbol();
   const selected = state?.selected ?? 'auto';
   const online = sellers.filter((s) => s.online);
   const active = state?.peer ?? null;
@@ -36,7 +38,7 @@ export default function Marketplace({
   const status = err
     ? 'engine error'
     : active
-      ? `${modelName(active.model)} · ${fmt(active.price)} USD₮`
+      ? `${modelName(active.model)} · ${fmt(active.price)} ${sym}`
       : online.length
         ? 'choose a peer'
         : 'searching for peers…';
@@ -80,7 +82,7 @@ export default function Marketplace({
               <span className="mr-check">{selected === s.id ? '✓' : ''}</span>
             </span>
             <span className="mr-sub">
-              {fmt(s.price)} USD₮ · {Math.round(s.tps)} tps · {short(s.address)}
+              {fmt(s.price)} {sym} · {Math.round(s.tps)} tps · {short(s.address)}
             </span>
           </button>
         ))}

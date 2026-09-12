@@ -1,4 +1,5 @@
 import type { State } from '../api';
+import { useSymbol } from '../symbol';
 import { Mark, Bolt, Gpu } from './icons';
 import { fmt, short } from '../format';
 
@@ -26,6 +27,7 @@ export default function TopBar({
   onVerify: () => void;
 }) {
   const addr = state?.buyer?.address ?? state?.wallet.address ?? '';
+  const sym = useSymbol();
   const net = state?.network;
   const human = state?.human;
   const humanTitle = !human?.enabled
@@ -42,7 +44,7 @@ export default function TopBar({
         <Mark size={26} />
         <div>
           <div className="wordmark">Conduit</div>
-          <div className="tag">P2P inference · USD₮</div>
+          <div className="tag">P2P inference · {sym}</div>
         </div>
       </div>
 
@@ -90,7 +92,7 @@ export default function TopBar({
 
       <button className="wallet-pill" onClick={onManage} title="Manage wallet">
         <span className={`wp-bal${flash ? ' flash' : ''}`}>{fmt(state?.buyer?.usdt)}</span>
-        <span className="wp-unit">USD₮</span>
+        <span className="wp-unit">{sym}</span>
         <span className="wp-addr">{short(addr)}</span>
       </button>
     </header>

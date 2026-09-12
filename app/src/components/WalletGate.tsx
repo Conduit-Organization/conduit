@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSymbol } from '../symbol';
 import { createWallet, importWallet, unlockWallet, type WalletStatus } from '../api';
 import { secretAvailable, rememberPassword, getRememberedPassword, forgetPassword } from '../desktop';
 import { Mark } from './icons';
@@ -12,6 +13,7 @@ function short(a: string | null): string {
 }
 
 export default function WalletGate({ status, onUnlocked }: { status: WalletStatus; onUnlocked: () => void }) {
+  const sym = useSymbol();
   const [view, setView] = useState<View>(status.exists ? 'unlock' : 'choose');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
@@ -106,7 +108,7 @@ export default function WalletGate({ status, onUnlocked }: { status: WalletStatu
         {view === 'choose' && (
           <>
             <h2>Your private AI wallet</h2>
-            <p className="gate-sub">Pay peers a fraction of a cent in USD₮ for answers — no account, no cloud. Your keys stay on this device.</p>
+            <p className="gate-sub">Pay peers a fraction of a cent in {sym} for answers — no account, no cloud. Your keys stay on this device.</p>
             <button className="gate-btn primary" onClick={() => { reset(); setView('create'); }}>Create a new wallet</button>
             <button className="gate-btn ghost" onClick={() => { reset(); setView('import'); }}>I already have a recovery phrase</button>
           </>

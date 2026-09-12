@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SymbolProvider } from './symbol';
 import {
   ask, getSellers, getState, selectSeller, getSellerStatus, startSeller, stopSeller,
   type Peer, type State, type SellerStatus,
@@ -149,12 +150,19 @@ export default function App() {
     );
   }
   if (!state.wallet.unlocked) {
-    return <WalletGate status={state.wallet} onUnlocked={refresh} />;
+    // The engine reports its network before the wallet is unlocked, so the gate can name
+    // the right asset instead of guessing.
+    return (
+      <SymbolProvider value={state.network?.symbol}>
+        <WalletGate status={state.wallet} onUnlocked={refresh} />
+      </SymbolProvider>
+    );
   }
 
   const active = state.peer ?? null;
 
   return (
+    <SymbolProvider value={state.network?.symbol}>
     <div className="shell">
       <TopBar role={role} onRole={changeRole} state={state} flash={flash} onManage={() => setMenuOpen(true)} onVerify={() => setVerifyOpen(true)} />
       <ModelBanner progress={state.modelProgress} />
@@ -196,10 +204,12 @@ export default function App() {
       {menuOpen && state.wallet.address && (
         <WalletMenu
           address={state.wallet.address}
+          state={state}
           onClose={() => setMenuOpen(false)}
           onLocked={() => { setMenuOpen(false); setMessages([]); void refresh(); }}
         />
       )}
     </div>
+    </SymbolProvider>
   );
 }

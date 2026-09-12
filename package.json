@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Conduit \u2014 a serverless P2P inference market where a settled USD\u20ae payment is the access handshake.",
+  "description": "Conduit \u2014 a serverless P2P inference market where a settled USDC payment is the access handshake.",
   "license": "Apache-2.0",
   "author": "Conduit Organization <kaustubhp2003@gmail.com>",
   "main": "electron/dist/main.js",

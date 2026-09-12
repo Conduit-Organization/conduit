@@ -505,7 +505,7 @@ const server = http.createServer((req, res) => {
         json(res, 200, {
           wallet: w, ready: false, sellersOnline: 0, peer: null, selected: 'auto',
           alwaysPay: cfg.alwaysPay,
-          network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol },
+          network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol, faucet: cfg.network.faucet ?? null, gasIsSettlementToken: cfg.network.gasIsSettlementToken },
           integrations: integrationsJson(),
           setupErr: setupErr ?? null, modelProgress,
         });
@@ -537,7 +537,7 @@ const server = http.createServer((req, res) => {
         alwaysPay: cfg.alwaysPay,
         integrations: integrationsJson(),
         humanProof: !!humanity,
-        network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol },
+        network: { name: cfg.network.name, label: cfg.network.label, explorer: cfg.network.explorer, symbol: cfg.network.settlementSymbol, faucet: cfg.network.faucet ?? null, gasIsSettlementToken: cfg.network.gasIsSettlementToken },
         ready: (cfg.alwaysPay ? !!storefront : routerReady) && !setupErr,
         setupErr: setupErr ?? null,
         modelProgress,

@@ -113,7 +113,7 @@ export interface State {
   integrations?: Integrations;
   human?: HumanStatus; // is THIS buyer wallet backed by a verified unique human
   humanProof?: boolean; // this engine attaches a World human proof to sessions
-  network?: { name: string; label: string; explorer: string; symbol: string };
+  network?: { name: string; label: string; explorer: string; symbol: string; faucet?: string | null; gasIsSettlementToken?: boolean };
   ready: boolean;
   setupErr: string | null;
   modelProgress?: ModelProgress;
