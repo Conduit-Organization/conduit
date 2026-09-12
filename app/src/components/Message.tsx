@@ -38,10 +38,17 @@ function Stamp({ r }: { r: AskResult }) {
       : r.reason === 'budget' ? 'Spend limit reached'
       : r.reason === 'error' ? 'Purchase refused'
       : 'Not answered';
+    // The reason used to live ONLY in a title tooltip. That made every refusal look
+    // identical — "Purchase refused" and nothing else — in screenshots, in a demo, and to
+    // anyone who does not hover. The cause is the most useful thing on the screen here, so
+    // it is shown.
     return (
-      <span className="stamp declined" title={r.note ?? undefined}>
-        <Local /> {label}
-      </span>
+      <div className="declined-box">
+        <span className="stamp declined">
+          <Local /> {label}
+        </span>
+        {r.note && <p className="declined-why">{r.note}</p>}
+      </div>
     );
   }
   return (

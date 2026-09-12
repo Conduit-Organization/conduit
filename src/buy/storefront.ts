@@ -6,7 +6,7 @@
 // (Generalises src/node/buy.ts to many sellers + a long-lived process.)
 import crypto from 'node:crypto';
 import Hyperswarm from 'hyperswarm';
-import { Wallet as EthWallet, JsonRpcProvider } from 'ethers';
+import { Wallet as EthWallet, JsonRpcProvider, formatUnits } from 'ethers';
 import { send, onMessages, bindMessage, type Msg } from '../core/protocol';
 import { createEscrowClient, type EscrowClient } from '../core/escrow';
 import { sameSettlementNetwork } from '../core/networks';
@@ -73,6 +73,7 @@ export interface StorefrontDeps {
   consumerPub: string; // QVAC consumer pubkey (the key the seller firewall-allows on grant)
   sdk: any; // @qvac/sdk (for the delegated loadModel/completion)
   rpcUrl: string; // EVM RPC (for escrow on-chain open/topUp)
+  symbol?: string; // settlement ticker, so amounts in errors name the right asset
   escrow?: { address: string; chainId: number } | null; // deployed ConduitEscrow (enables channel mode)
   depositBaseUnits?: bigint; // per-channel deposit (default 0.05 USD₮)
   sessionDurationSecs?: number; // channel expiry (default 1h)
@@ -404,11 +405,39 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
         const ch = await esc.channel(escrowWallet.address, seller.sellerWallet);
         sess.deposit = ch.deposit;
       }
+      // The voucher is signed BEFORE the answer is generated, and that ordering is
+      // deliberate: the payment is the access handshake, and a seller that streamed tokens
+      // first would be serving on credit to anyone who asked.
+      //
+      // The cost of that ordering is this: if the answer never arrives, the buyer has
+      // already signed away the money. That has to be said out loud rather than reported as
+      // a plain refusal — and the running total has to be rolled back, because leaving it
+      // raised would make the NEXT voucher jump by two inferences' worth and pay for the
+      // failure twice.
+      const owedBefore = sess.cumulative;
       sess.cumulative += price; // running total owed
       const sig = await esc.signVoucher(escrowWallet, seller.sellerWallet, sess.epoch, sess.cumulative);
       send(conn, { type: 'draw', buyerWallet: escrowWallet.address, cumulative: sess.cumulative.toString(), signature: sig });
-      await waitFor(rec, 'drawAck', 20_000); // seller verified + recorded the voucher (instant)
-      const out = await delegateAndRun(sess.providerPub, seller.model, prompt, opts?.predict);
+      try {
+        await waitFor(rec, 'drawAck', 20_000); // seller verified + recorded the voucher (instant)
+      } catch (e) {
+        sess.cumulative = owedBefore; // never acked — the seller has no voucher to redeem
+        throw e;
+      }
+
+      let out;
+      try {
+        out = await delegateAndRun(sess.providerPub, seller.model, prompt, opts?.predict);
+      } catch (e: any) {
+        // The seller holds a signed voucher for this inference, so the money IS committed.
+        // Rolling the local total back keeps the next voucher correct; it does not un-spend
+        // this one, and pretending otherwise would be a lie about the buyer's balance.
+        sess.cumulative = owedBefore;
+        const why = String(e?.message ?? e);
+        throw new Error(
+          `paid ${formatUnits(price, 6)} ${deps.symbol ?? 'USDC'} but the answer never arrived — ${why}`,
+        );
+      }
       return { ...out, cost: price, via: 'channel', model: seller.model, sellerWallet: seller.sellerWallet };
     }
 

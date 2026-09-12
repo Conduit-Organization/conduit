@@ -234,7 +234,7 @@ const routerPromise = cfg.alwaysPay
 
 async function unlockWith(mnemonic: string): Promise<string> {
   const acct = await getAccount(mnemonic, cfg.rpcUrl, 0); // buyer = account 0 of this wallet
-  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, escrow: escrowDep, reputation, humanity, log: (m) => console.log(m) });
+  const sf = await createStorefront({ buyer: acct, signerPhrase: mnemonic, consumerPub: buyerPub, sdk, rpcUrl: cfg.rpcUrl, symbol: cfg.network.settlementSymbol, escrow: escrowDep, reputation, humanity, log: (m) => console.log(m) });
   buyer = acct;
   storefront = sf;
   agent = null; // (re)created lazily once the router is warm
