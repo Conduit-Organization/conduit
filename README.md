@@ -457,6 +457,7 @@ found — none of them takes anything on trust from this repo:
 | `npm run arc-e2e` | the whole payment rail on Arc in USDC: approve → open → sign vouchers → claim → settle → balances reconcile. Needs `CONDUIT_DEPLOYER_KEY` (a funded key). |
 | `npm run graph-check` | the subgraph is synced and its settlement history satisfies the invariants the reputation layer depends on |
 | `npm run humanity-check` | the World gate, read live from AgentBook on World Chain: an unregistered wallet is refused and a registered one admitted, with signature / freshness / seller-binding / replay refusing both alike |
+| `npm run doctor` | whether THIS machine can take part at all: a stale worker lock, whether the inference runtime starts, and whether the capability profile belongs to this machine. Run it first when anything misbehaves — it touches no peer, no wallet and no funds. |
 | `npm run seller-check` | whether THIS machine can serve at all — starts the QVAC provider behind a firewall that admits nobody, then stops it. Run it before going online if a seller is misbehaving. |
 | `npm run attack-demo` | buys a seller's reputation with forged signals, then shows the hardened rules and the human gate pricing the same attack in people rather than gas |
 
