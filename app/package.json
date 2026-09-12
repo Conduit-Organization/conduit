@@ -12,12 +12,14 @@
   "dependencies": {
     "conduit": "file:..",
     "framer-motion": "^11.11.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.1.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",

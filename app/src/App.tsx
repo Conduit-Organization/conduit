@@ -12,6 +12,7 @@ import WalletMenu from './components/WalletMenu';
 import TopBar, { type Role } from './components/TopBar';
 import MarketplaceScreen from './components/MarketplaceScreen';
 import SellerScreen from './components/SellerScreen';
+import HumanVerify from './components/HumanVerify';
 import ModelBanner from './components/ModelBanner';
 import { Mark, Back } from './components/icons';
 import { modelName } from './format';
@@ -27,6 +28,7 @@ export default function App() {
   const [sellerBusy, setSellerBusy] = useState(false);
   const [flash, setFlash] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   const [role, setRole] = useState<Role>(() => (localStorage.getItem(ROLE_KEY) as Role) || 'buyer');
   const [view, setView] = useState<'marketplace' | 'chat'>('marketplace');
@@ -154,7 +156,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <TopBar role={role} onRole={changeRole} state={state} flash={flash} onManage={() => setMenuOpen(true)} />
+      <TopBar role={role} onRole={changeRole} state={state} flash={flash} onManage={() => setMenuOpen(true)} onVerify={() => setVerifyOpen(true)} />
       <ModelBanner progress={state.modelProgress} />
 
       <div className="shell-body">
@@ -180,6 +182,14 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {verifyOpen && state.wallet.address && (
+        <HumanVerify
+          address={state.buyer?.address ?? state.wallet.address}
+          onClose={() => { setVerifyOpen(false); void refresh(); }}
+          onVerified={() => void refresh()}
+        />
+      )}
 
       {menuOpen && state.wallet.address && (
         <WalletMenu

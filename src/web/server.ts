@@ -30,6 +30,7 @@ const { createHumanity } = await import('../core/humanity');
 const { reliability, globalScore } = await import('../core/qualification');
 const { labelForChainId } = await import('../core/networks');
 const { createSellerManager } = await import('./seller');
+const { createHumanityRegistrar } = await import('./humanity-register');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
 const keystore = await import('../core/keystore');
 const sdk: any = await import('@qvac/sdk');
@@ -97,6 +98,10 @@ if (graphEndpoint) {
 
 // Seller mode: the engine manages the proven sell.ts as a child (spawn/kill/inspect). It earns into
 // account index 1 of the unlocked wallet (distinct from the buyer's index 0). See src/web/seller.ts.
+// ETHOnline 2026: lets a user become human-verified from inside the app, instead of
+// needing the AgentKit CLI by hand. See src/web/humanity-register.ts.
+const registrar = createHumanityRegistrar({ log: (m) => console.log(m) });
+
 const seller = createSellerManager({
   repoRoot: RESOURCES,
   rpcUrl: cfg.rpcUrl,
@@ -442,6 +447,26 @@ const server = http.createServer((req, res) => {
       json(res, 200, sellerProfile());
       return;
     }
+    // ---------- human verification (World) ----------
+    if (req.method === 'POST' && p === '/api/human/register') {
+      if (!wallet || !buyer) { json(res, 401, { error: 'wallet locked' }); return; }
+      json(res, 200, registrar.start(buyer.address));
+      return;
+    }
+    if (req.method === 'GET' && p === '/api/human/register') {
+      const st = registrar.status();
+      // The moment registration lands, drop the cached humanity so the header flips on
+      // the next poll instead of waiting out the 5-minute TTL.
+      if (st.phase === 'done' && humanSelf) humanSelf = null;
+      json(res, 200, st);
+      return;
+    }
+    if (req.method === 'POST' && p === '/api/human/register/cancel') {
+      registrar.cancel();
+      json(res, 200, { ok: true });
+      return;
+    }
+
     if (req.method === 'POST' && p === '/api/seller/start') {
       if (!wallet) { json(res, 401, { error: 'wallet locked' }); return; }
       // `model` optional: the seller's chosen model (else the prober's pick).

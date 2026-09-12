@@ -16,12 +16,14 @@ export default function TopBar({
   state,
   flash,
   onManage,
+  onVerify,
 }: {
   role: Role;
   onRole: (r: Role) => void;
   state: State | null;
   flash: boolean;
   onManage: () => void;
+  onVerify: () => void;
 }) {
   const addr = state?.buyer?.address ?? state?.wallet.address ?? '';
   const net = state?.network;
@@ -73,12 +75,16 @@ export default function TopBar({
           </span>
         )}
         {human?.enabled && (
-          <span
-            className={`tb-chip human${human.verified ? ' ok' : human.checked ? ' no' : ''}`}
-            title={humanTitle}
+          // Unverified is actionable, not just informational — clicking it opens the
+          // flow that fixes it, which is the whole point of having the chip.
+          <button
+            className={`tb-chip human${human.verified ? ' ok' : human.checked ? ' no clickable' : ''}`}
+            title={human.verified ? humanTitle : `${humanTitle} — click to verify`}
+            onClick={() => { if (!human.verified && human.checked) onVerify(); }}
+            disabled={human.verified || !human.checked}
           >
-            {human.verified ? '✓ human-verified' : human.checked ? 'not verified' : 'checking…'}
-          </span>
+            {human.verified ? '✓ human-verified' : human.checked ? 'verify you\'re human' : 'checking…'}
+          </button>
         )}
       </div>
 

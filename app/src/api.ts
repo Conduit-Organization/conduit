@@ -234,3 +234,30 @@ export async function exportWallet(password: string): Promise<string> {
   const d = await postJson('/api/wallet/export', { password });
   return d.mnemonic as string;
 }
+
+// ── ETHOnline 2026: in-app World ID registration ─────────────────────────────
+export type RegisterPhase = 'idle' | 'starting' | 'awaiting' | 'registering' | 'done' | 'error';
+
+export interface RegisterStatus {
+  phase: RegisterPhase;
+  address: string | null;
+  /** Deep link to open in World App. The client renders the QR from this. */
+  url: string | null;
+  txHash: string | null;
+  error: string | null;
+  startedAt: number | null;
+}
+
+export async function startHumanRegister(): Promise<RegisterStatus> {
+  return postJson('/api/human/register', {});
+}
+
+export async function getHumanRegister(): Promise<RegisterStatus> {
+  const r = await fetch('/api/human/register');
+  if (!r.ok) throw new Error(`human register ${r.status}`);
+  return r.json();
+}
+
+export async function cancelHumanRegister(): Promise<void> {
+  await postJson('/api/human/register/cancel', {});
+}
