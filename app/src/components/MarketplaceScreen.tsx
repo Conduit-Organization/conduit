@@ -3,6 +3,7 @@ import type { State, Peer, GlobalRecord } from '../api';
 import { Star } from './icons';
 import { fmt, short, modelName } from '../format';
 import * as bm from '../bookmarks';
+import Integrations from './Integrations';
 
 // The buyer's landing screen (Binance-P2P style): browse sellers, ★ bookmark, pick one — or Auto —
 // then enter chat. Choosing a seller ≠ paying: easy questions still answer free on-device; the chosen
@@ -226,6 +227,8 @@ export default function MarketplaceScreen({
           </div>
         )}
       </section>
+
+      <Integrations state={state} />
     </div>
   );
 }

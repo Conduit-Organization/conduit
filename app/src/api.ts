@@ -42,6 +42,28 @@ export interface GlobalRecord {
   naiveReliability: number;
 }
 
+/** What each integration is doing right now, with verifiable links. */
+export interface Integrations {
+  arc: {
+    network: string;
+    chainId: number;
+    settlementToken: string;
+    symbol: string;
+    /** On Arc the gas token IS the settlement token. */
+    gasIsSettlementToken: boolean;
+    escrow: string | null;
+    explorer: string;
+    escrowUrl: string | null;
+  };
+  graph: GraphStatus & { endpoint: string | null; network: string | null };
+  world: HumanStatus & {
+    agentBook: string;
+    chain: string;
+    agentBookUrl: string;
+    walletUrl: string | null;
+  };
+}
+
 /** Whether this buyer wallet resolves to a unique human in AgentBook on World Chain. */
 export interface HumanStatus {
   /** This engine attaches a proof at all (buyer-side switch). */
@@ -83,6 +105,10 @@ export interface State {
   escrow?: boolean; // escrow (payment-channel) mode is enabled on this engine
   sessions?: EscrowSession[]; // open payment channels (instant paid answers)
   graph?: GraphStatus; // ETHOnline 2026 — global reputation layer status
+  /** Every answer is bought from a peer; there is no free local tier. */
+  alwaysPay?: boolean;
+  /** Live status of the three integrations, with links a judge can verify. */
+  integrations?: Integrations;
   human?: HumanStatus; // is THIS buyer wallet backed by a verified unique human
   humanProof?: boolean; // this engine attaches a World human proof to sessions
   network?: { name: string; label: string; explorer: string; symbol: string };

@@ -815,6 +815,34 @@ body::after {
 .ms-human { font-family: var(--font-mono); font-size: 10px; color: var(--amber); }
 .ms-human.ok { color: var(--mint); }
 
+/* --- ETHOnline 2026: live integration status ----------------------------- */
+.ig-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 12px; }
+.ig-card {
+  background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px;
+  padding: 15px 16px; display: flex; flex-direction: column; gap: 9px;
+}
+.ig-head { display: flex; align-items: center; gap: 8px; }
+.ig-head b { font-size: 14.5px; }
+.ig-role {
+  margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted-2);
+}
+/* Amber until the integration is actually doing something — never green by default. */
+.ig-dot { width: 7px; height: 7px; border-radius: 99px; background: var(--amber); flex: none; }
+.ig-dot.on { background: var(--mint); box-shadow: 0 0 0 3px var(--mint-soft); }
+.ig-what { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.ig-what b { color: var(--text); font-weight: 600; }
+
+.ig-facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 2px 0 0; }
+.ig-facts dt {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.4px;
+  color: var(--muted-2); text-transform: uppercase;
+}
+.ig-facts dd { margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text); }
+.ig-facts a { color: var(--mint); }
+.ig-ok { color: var(--mint); }
+.ig-off { color: var(--amber); }
+
 /* --- ETHOnline 2026: a seller's refusal, rendered as a decision not a crash -- */
 .refusal { border-left: 2px solid var(--amber); padding: 2px 0 2px 11px; }
 .rf-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
