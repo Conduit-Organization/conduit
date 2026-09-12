@@ -329,15 +329,15 @@ macOS and Windows builds must be produced **on** those platforms — a DMG needs
 
 #### Platform notes
 
-**Install before running (macOS).** Drag `Conduit.app` to `/Applications` first. Launching
-it directly from the mounted DMG fails:
+**Read-only media.** npm does not preserve the executable bit inside published packages,
+so `bare-runtime`'s `bin/bare` — the process the inference worker runs in — arrives
+non-executable and the library repairs it at startup with a `chmod`. That repair cannot
+work from a read-only medium, which broke launching from a mounted DMG (`EROFS`) and from
+the Linux AppImage (`EACCES`).
 
-```
-Error: EROFS: read-only file system, chmod '.../bare-runtime-darwin-arm64/bin/bare'
-```
-
-The engine makes its runtime binary executable at startup, which a read-only DMG volume
-cannot allow.
+An `afterPack` hook (`scripts/after-pack.mjs`) now sets the bit at package time, so the
+runtime repair is never needed and both run directly. Dragging `Conduit.app` to
+`/Applications` is still good practice, but no longer required to start.
 
 **macOS also needs OpenSSL 3.** The vendor's `darwin-arm64` prebuilds for the inference
 engine (`@qvac/llm-llamacpp`, `@qvac/embed-llamacpp`) link against absolute Homebrew

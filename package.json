@@ -82,7 +82,8 @@
       ],
       "category": "Development",
       "icon": "build/icon.png"
-    }
+    },
+    "afterPack": "scripts/after-pack.mjs"
   },
   "dependencies": {
     "@qvac/sdk": "^0.12.0",
