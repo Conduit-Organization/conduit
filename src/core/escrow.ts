@@ -7,6 +7,7 @@ import { Contract, JsonRpcProvider, TypedDataEncoder, verifyTypedData, type Base
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { NETWORKS, DEFAULT_NETWORK } from './networks';
 
 const ESCROW_ABI = [
   'function open(address seller, uint256 amount, uint64 duration)',
@@ -123,20 +124,27 @@ export function offchainVoucherDigest(domain: any, buyer: string, seller: string
 // Sepolia, so `CONDUIT_NETWORK=arc-testnet` picks up the Arc deployment. Sepolia remains
 // the default and the fallback, so no existing setup changes behaviour.
 export function loadEscrowDeployment(networkName?: string): { address: string; chainId: number } | null {
+  const name = networkName || process.env.CONDUIT_NETWORK || DEFAULT_NETWORK;
+
+  // An explicit address override still wins, but it must not drag a hardcoded chain id
+  // along with it — pairing someone's custom address with Sepolia's chain was how a
+  // packaged Arc build ended up querying the wrong network entirely.
   if (process.env.CONDUIT_ESCROW_ADDRESS) {
-    return { address: process.env.CONDUIT_ESCROW_ADDRESS, chainId: Number(process.env.CONDUIT_CHAIN_ID || '11155111') };
+    const chainId = Number(process.env.CONDUIT_CHAIN_ID || NETWORKS[name]?.chainId || 0);
+    return { address: process.env.CONDUIT_ESCROW_ADDRESS, chainId };
   }
-  const name = networkName || process.env.CONDUIT_NETWORK || 'sepolia';
+  // The network profile is the source of truth: it pairs an escrow address with the chain
+  // it lives on, so the two can never drift apart. A deployment file is only consulted as
+  // a fallback for a network the profile does not know about.
+  const profile = NETWORKS[name];
+  if (profile?.escrow) return { address: profile.escrow, chainId: profile.chainId };
+
   const here = path.dirname(fileURLToPath(import.meta.url));
-  // Try the selected network, then fall back to Sepolia — a missing Arc deployment must
-  // not leave a buyer with no escrow at all.
-  for (const candidate of [name, 'sepolia']) {
-    try {
-      const j = JSON.parse(readFileSync(path.join(here, `../../contracts/deployed.${candidate}.json`), 'utf8'));
-      if (j?.escrow) return { address: j.escrow, chainId: Number(j.chainId) };
-    } catch {
-      /* try the next candidate */
-    }
+  try {
+    const j = JSON.parse(readFileSync(path.join(here, `../../contracts/deployed.${name}.json`), 'utf8'));
+    if (j?.escrow) return { address: j.escrow, chainId: Number(j.chainId) };
+  } catch {
+    /* no deployment record for this network */
   }
   return null;
 }

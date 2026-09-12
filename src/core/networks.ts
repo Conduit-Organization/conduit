@@ -134,3 +134,22 @@ export function labelForChainId(chainId: number): string {
 export function listNetworks(): NetworkProfile[] {
   return Object.values(NETWORKS);
 }
+
+/**
+ * Can a buyer on `buyerChain` actually transact with a seller on `sellerChain`?
+ *
+ * Each network has its own ConduitEscrow deployment, so a channel opened on one chain is
+ * invisible on the other: the seller would read an empty channel and refuse. That has to
+ * be decided in ONE place, because two consumers ask the question — the marketplace card
+ * (which greys the seller out) and the "Auto" router (which must never pick them). When
+ * those two disagreed, a card looked clickable and every purchase through it failed with
+ * an opaque decode error.
+ *
+ * A seller that announces no chain is treated as ours: every build sends `chainId` in its
+ * offer, so this only covers a peer too old to say, and matching the card's tolerance
+ * keeps the two answers identical.
+ */
+export function sameSettlementNetwork(sellerChain: number | undefined, buyerChain: number | undefined): boolean {
+  if (buyerChain == null) return true; // we have no escrow of our own — nothing to mismatch
+  return (sellerChain ?? buyerChain) === buyerChain;
+}

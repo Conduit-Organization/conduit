@@ -9,6 +9,7 @@ import Hyperswarm from 'hyperswarm';
 import { Wallet as EthWallet, JsonRpcProvider } from 'ethers';
 import { send, onMessages, bindMessage, type Msg } from '../core/protocol';
 import { createEscrowClient, type EscrowClient } from '../core/escrow';
+import { sameSettlementNetwork } from '../core/networks';
 import type { Reputation } from '../core/reputation';
 import type { Humanity, HumanProof } from '../core/humanity';
 import type { ConduitAccount } from '../core/wallet';
@@ -127,7 +128,13 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
   }
 
   function activeOffer(): SellerOffer | null {
-    const online = offers().filter((o) => o.online);
+    // Only sellers settling on OUR network are candidates. A seller on another chain uses a
+    // different escrow deployment, so a purchase from them cannot succeed — "Auto" picking
+    // one would just produce a confusing failure at payment time. The marketplace shows
+    // them, greyed out; it simply never routes to them.
+    const ourChain = deps.escrow?.chainId;
+    const reachable = offers().filter((o) => sameSettlementNetwork(o.chainId, ourChain));
+    const online = reachable.filter((o) => o.online);
     if (!online.length) return null;
     if (selected !== 'auto') {
       const sel = online.find((o) => o.id === selected);

@@ -30,7 +30,7 @@ const { createHumanity } = await import('../core/humanity');
 // Canonical AgentBook deployment on World Chain (see src/core/humanity.ts).
 const AGENT_BOOK_ADDRESS = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA';
 const { reliability, globalScore } = await import('../core/qualification');
-const { labelForChainId } = await import('../core/networks');
+const { labelForChainId, sameSettlementNetwork } = await import('../core/networks');
 const { createSellerManager } = await import('./seller');
 const { createHumanityRegistrar } = await import('./humanity-register');
 const { offerFromProfile, priceFor } = await import('../core/pricing');
@@ -255,7 +255,7 @@ function offerJson(o: { id: string; sellerWallet: string; model: string; priceBa
     requireHuman: !!o.requireHuman,
     chainId: sellerChain,
     network: labelForChainId(sellerChain),
-    sameNetwork: sellerChain === cfg.chainId,
+    sameNetwork: sameSettlementNetwork(o.chainId, cfg.chainId),
     // The blended score the "Auto" sort actually uses (storefront.ts:126-128).
     score: reputation.score(o.sellerWallet),
     global: globalJson(o.sellerWallet),

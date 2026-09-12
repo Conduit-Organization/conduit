@@ -20,13 +20,17 @@ const READY_TIMEOUT_MS = 90_000; // engine boot can include first model warm-up;
 const SHUTDOWN_GRACE_MS = 8_000; // give the engine time to stop the Bare worker before we SIGKILL
 
 // Escrow (instant payment-channel) is ON by default in the shipped app — paid answers settle off-chain
-// in ~2s instead of waiting ~15s on-chain each time. The contract is deployed on Sepolia; the address
-// is public (not a secret). Passed via env so it works in both packaged and dev electron runs without
-// bundling deployed.sepolia.json. (Keep in sync with contracts/deployed.sepolia.json if redeployed.)
+// in ~2s instead of waiting ~15s on-chain each time.
+//
+// The contract ADDRESS is deliberately NOT set here. It used to be, pinned to Sepolia from
+// when that was the only network, and it silently overrode whatever network the app was
+// configured for: loadEscrowDeployment() reads CONDUIT_ESCROW_ADDRESS before consulting
+// the network profile, so a packaged build settling on Arc would query the Arc RPC for a
+// Sepolia address, get back "0x", and fail every purchase with a decode error. The address
+// now comes from the selected network profile (src/core/networks.ts), which is the only
+// place that knows which chain we are actually on.
 const ESCROW_ENV: NodeJS.ProcessEnv = {
   CONDUIT_ESCROW: '1',
-  CONDUIT_ESCROW_ADDRESS: '0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7',
-  CONDUIT_CHAIN_ID: '11155111',
 };
 
 let engine: ChildProcess | null = null;
