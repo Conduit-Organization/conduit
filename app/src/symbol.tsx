@@ -1,24 +1,43 @@
 import { createContext, useContext } from 'react';
 
 /**
- * The ticker this engine settles in, available anywhere in the tree.
+ * Facts about the network this engine settles on, available anywhere in the tree.
  *
- * The app hardcoded "USD₮" in a dozen leaf components, which silently became wrong when
- * settlement moved to Arc — where the asset is USDC. Several of those leaves (a chat
- * receipt, the wallet gate, the seller dashboard) never receive `state`, so threading a
- * prop through every intermediate component just to relabel a currency would add noise to
- * files that have nothing to do with networks.
+ * The app hardcoded "USD₮" in a dozen leaf components and told every seller that buyers
+ * pay them "on Sepolia". Both silently became wrong when settlement moved to Arc, where
+ * the asset is USDC. Several of the places that show an amount — a chat receipt, the
+ * wallet gate, the seller dashboard — never receive engine state, so threading props
+ * through the tree purely to relabel a currency would put network concerns in files that
+ * have none.
  *
- * The default is USDC because that is the default network's asset; the provider overrides
- * it from `state.network.symbol` as soon as the engine reports in.
+ * The defaults describe the default network; the provider overrides them from
+ * `state.network` as soon as the engine reports in.
  */
 const SymbolContext = createContext<string>('USDC');
+const NetworkLabelContext = createContext<string>('this network');
 
-export function SymbolProvider({ value, children }: { value: string | undefined; children: React.ReactNode }) {
-  return <SymbolContext.Provider value={value ?? 'USDC'}>{children}</SymbolContext.Provider>;
+export function SymbolProvider({
+  value,
+  network,
+  children,
+}: {
+  value: string | undefined;
+  network?: string | undefined;
+  children: React.ReactNode;
+}) {
+  return (
+    <SymbolContext.Provider value={value ?? 'USDC'}>
+      <NetworkLabelContext.Provider value={network ?? 'this network'}>{children}</NetworkLabelContext.Provider>
+    </SymbolContext.Provider>
+  );
 }
 
 /** The settlement ticker to show next to an amount. */
 export function useSymbol(): string {
   return useContext(SymbolContext);
+}
+
+/** The human name of the settlement network ("Arc Testnet"). */
+export function useNetworkLabel(): string {
+  return useContext(NetworkLabelContext);
 }

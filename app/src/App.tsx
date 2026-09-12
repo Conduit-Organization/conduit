@@ -153,7 +153,7 @@ export default function App() {
     // The engine reports its network before the wallet is unlocked, so the gate can name
     // the right asset instead of guessing.
     return (
-      <SymbolProvider value={state.network?.symbol}>
+      <SymbolProvider value={state.network?.symbol} network={state.network?.label}>
         <WalletGate status={state.wallet} onUnlocked={refresh} />
       </SymbolProvider>
     );
@@ -162,7 +162,7 @@ export default function App() {
   const active = state.peer ?? null;
 
   return (
-    <SymbolProvider value={state.network?.symbol}>
+    <SymbolProvider value={state.network?.symbol} network={state.network?.label}>
     <div className="shell">
       <TopBar role={role} onRole={changeRole} state={state} flash={flash} onManage={() => setMenuOpen(true)} onVerify={() => setVerifyOpen(true)} />
       <ModelBanner progress={state.modelProgress} />

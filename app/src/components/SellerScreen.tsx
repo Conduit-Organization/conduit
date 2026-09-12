@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSymbol } from '../symbol';
+import { useSymbol, useNetworkLabel } from '../symbol';
 import { getSellerProfile, type SellerStatus, type SellerProfile } from '../api';
 import { Gpu } from './icons';
 import { short, modelName } from '../format';
@@ -25,6 +25,7 @@ export default function SellerScreen({
   onStop: () => void;
 }) {
   const sym = useSymbol();
+  const netLabel = useNetworkLabel();
   const [profile, setProfile] = useState<SellerProfile | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   // Seller POLICY, not a product rule: some sellers will sell to any funded keypair,
@@ -201,7 +202,7 @@ export default function SellerScreen({
         </div>
         <div className="ss-note">
           Earnings land in account #1 of your wallet ({short(status?.address ?? null)}). Buyers pay this
-          address directly on Sepolia.
+          address directly on <b>{netLabel}</b>.
         </div>
       </section>
     </div>
