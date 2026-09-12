@@ -37,6 +37,12 @@ export interface NetworkProfile {
   faucet?: string;
   /** True when the gas token and the settlement token are the same asset. */
   gasIsSettlementToken: boolean;
+  /**
+   * Ticker of the token fees are paid in. Equal to settlementSymbol wherever
+   * gasIsSettlementToken is true — the UI showed a hardcoded "ETH" gas row, which on Arc
+   * named the wrong asset AND restated the balance the buyer was already looking at.
+   */
+  gasSymbol: string;
   testnet: boolean;
   /** The Graph network slug, when the network is supported by Subgraph Studio. */
   graphNetwork?: string;
@@ -63,6 +69,7 @@ export const SEPOLIA: NetworkProfile = {
   explorer: 'https://sepolia.etherscan.io',
   escrow: '0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7',
   gasIsSettlementToken: false, // seller earns USD₮, pays gas in ETH
+  gasSymbol: 'ETH',
   testnet: true,
   graphNetwork: 'sepolia',
   subgraphUrl: 'https://api.studio.thegraph.com/query/1759016/conduit/v0.0.1',
@@ -92,6 +99,7 @@ export const ARC_TESTNET: NetworkProfile = {
   escrow: '0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2', // deployed 2026-09-09, block 61217992
   faucet: 'https://faucet.circle.com',
   gasIsSettlementToken: true, // USDC is the gas token — revenue and costs in one unit
+  gasSymbol: 'USDC',
   testnet: true,
   graphNetwork: 'arc-testnet',
   subgraphUrl: 'https://api.studio.thegraph.com/query/1759016/conduit-arc/v0.0.1',

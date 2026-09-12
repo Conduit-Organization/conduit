@@ -64,10 +64,19 @@ export default function Rail({
             {short(state?.buyer?.address ?? '')}
             <span className={copied ? 'copied' : ''}>{copied ? 'copied' : '⧉'}</span>
           </div>
-          <div className="gas">
-            <span>gas</span>
-            <b>{fmt(state?.buyer?.eth, 4)} ETH</b>
-          </div>
+          {/* Where gas and settlement are one asset (Arc), a second number would just
+              restate the balance above — so say where fees come from instead. */}
+          {state?.network?.gasIsSettlementToken ? (
+            <div className="gas">
+              <span>gas</span>
+              <b>paid in {sym}</b>
+            </div>
+          ) : (
+            <div className="gas">
+              <span>gas</span>
+              <b>{fmt(state?.buyer?.eth, 4)} {state?.network?.gasSymbol ?? 'ETH'}</b>
+            </div>
+          )}
           {state?.sessions && state.sessions.length > 0 && (
             <div className="channel-chip" title="Open payment channel — paid answers are instant (off-chain vouchers)">
               ⚡ channel · {fmt(state.sessions[0]!.remaining)} {sym} left
