@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-2be3a8"></a>
-  <img alt="Network" src="https://img.shields.io/badge/network-Sepolia%20testnet-ffc44d">
+  <img alt="Network" src="https://img.shields.io/badge/network-Arc%20testnet-ffc44d">
   <img alt="AI" src="https://img.shields.io/badge/AI-100%25%20on--device%20via%20QVAC-2be3a8">
   <img alt="Cloud bytes" src="https://img.shields.io/badge/prompt%20bytes%20to%20cloud-0-2be3a8">
   <a href="https://www.conduitt.xyz"><img alt="Site" src="https://img.shields.io/badge/site-conduitt.xyz-8a9aa6"></a>
@@ -34,7 +34,7 @@ wire; **the cloud sees nothing**. Every model runs fully on-device through the *
 - [Prerequisites](#prerequisites)
 - [Setup (clean checkout)](#setup-clean-checkout)
 - [Environment variables](#environment-variables)
-- [Contract addresses (Sepolia)](#contract-addresses-sepolia)
+- [Contract addresses](#contract-addresses)
 - [Getting testnet funds](#getting-testnet-funds)
 - [Running it](#running-it)
 - [All commands](#all-commands)
@@ -188,13 +188,20 @@ The buyer→answer path has four hops:
 
 1. **Discover** — peers meet on a Hyperswarm/Holepunch DHT (topic `conduit:market:v1`) with NAT
    hole-punching. There is no server in the middle. The seller advertises an offer (model + price + tps).
-2. **Route** — an on-device **confidence router** samples a small local model *k* times and measures
-   self-consistency (QVAC exposes no logprobs, so we use answer stability). Easy/consistent prompts are
-   answered **free, locally**; only hard/ambiguous ones **escalate** to a paid peer.
-3. **Pay** — escalation opens an **escrow payment channel** (one on-chain deposit), then settles each
-   answer **off-chain** with a signed **EIP-712 voucher** — answers come back in ~2s with no on-chain
-   wait. (A simpler per-inference on-chain payment path also exists.) A **SpendPolicy** (per-call cap +
-   session budget) authorizes the spend; if it declines, the buyer keeps the free local draft.
+2. **Choose** — the buyer scores the sellers it can see and picks one: global reputation from The Graph
+   first, then price, then speed. A seller settling on a different chain is shown but never routed to,
+   because a channel opened on one chain is invisible on the other.
+3. **Pay** — **every answer is bought from a peer.** The first purchase from a seller opens an **escrow
+   payment channel** (one on-chain deposit), and each answer after that settles **off-chain** with a
+   signed **EIP-712 voucher** — answers come back in ~2s with no on-chain wait, and the channel tops
+   itself up when it runs low. A **SpendPolicy** (per-call cap + session budget) authorizes the spend;
+   if it declines, the purchase is refused and says why.
+
+   > Setting `CONDUIT_ALWAYS_PAY=0` restores the original behaviour: an on-device **confidence router**
+   > samples a small local model *k* times and measures self-consistency (QVAC exposes no logprobs, so
+   > answer stability stands in), answers easy prompts free on-device, and escalates only the hard ones.
+   > It is off by default because it made the market — the thing this product *is* — invisible half the
+   > time.
 4. **Run** — the payment releases the seller's **firewall-gated QVAC provider** pubkey; the buyer
    delegates inference to it over the E2E link. The model executes **on the seller's device** — the
    buyer never sees the weights, the seller never sees the buyer's keys, and no prompt touches a cloud.
@@ -229,7 +236,7 @@ codebase; buyer/seller is a runtime flag.
 - **Node.js ≥ 22**
 - A **GPU**: NVIDIA + Vulkan (Linux/Windows) or Apple Silicon + Metal (macOS) for the seller role
 - **~10 GB free disk** for the on-device model cache (`~/.qvac`)
-- A funded **testnet** wallet: a little **Sepolia ETH** (gas) + **test USD₮** (see [faucets](#getting-testnet-funds))
+- A funded **testnet** wallet: on Arc (the default) a little **USDC** covers both gas and payments (see [faucets](#getting-testnet-funds))
 - `git`
 
 ---
@@ -245,7 +252,8 @@ npm install                     # also compiles native modules for your platform
 # 2. Configure the environment
 cp .env.example .env            # then edit .env — see the table below
 
-# 3. Fund the wallet (account 0 = buyer): Sepolia ETH for gas + test USD₮ (faucets below)
+# 3. Fund the wallet (account 0 = buyer) with Arc testnet USDC — one asset covers
+#    both gas and payments on Arc. Faucet: https://faucet.circle.com
 
 # 4. Benchmark this machine → bench-profile.json (picks the best sellable model)
 npm run bench
@@ -265,31 +273,50 @@ Copy `.env.example` → `.env` and fill in. Both roles read this file. **Testnet
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `CONDUIT_WALLET_MNEMONIC` | ✅ | — | BIP-39 seed phrase (testnet). Account 0 = buyer, account 1 = seller earnings. |
-| `CONDUIT_RPC_URL` | ✅ | `https://rpc.sepolia.org` | EVM **testnet RPC** — the only remote service, non-AI, settlement only. |
-| `CONDUIT_CHAIN_ID` | ✅ | `11155111` | Sepolia chain id. |
-| `CONDUIT_USDT_ADDRESS` | ✅ | — | Test USD₮ token contract (see below). |
-| `CONDUIT_ESCROW` | — | `0` | `1` enables the instant escrow payment-channel path (recommended). |
-| `CONDUIT_ESCROW_ADDRESS` | when escrow on | — | Deployed `ConduitEscrow` contract (see below). |
+| `CONDUIT_WALLET_MNEMONIC` | — | keystore | BIP-39 seed phrase (testnet). Account 0 = buyer, account 1 = seller earnings. The desktop app uses its own encrypted keystore instead. |
+| `CONDUIT_NETWORK` | — | `arc-testnet` | Which network profile to settle on: `arc-testnet` or `sepolia`. Selects the RPC, token, escrow and subgraph **as a matching set** — so these cannot drift apart. |
+| `CONDUIT_RPC_URL` | — | the profile's | EVM **testnet RPC** — the only remote service, non-AI, settlement only. |
+| `CONDUIT_CHAIN_ID` | — | the profile's | Override the chain id. Rarely needed; the profile supplies it. |
+| `CONDUIT_USDT_ADDRESS` | — | the profile's | Settlement token contract. |
+| `CONDUIT_ESCROW` | — | `1` | Escrow payment channels. **On by default** — this is how paid answers work. |
+| `CONDUIT_ESCROW_ADDRESS` | — | the profile's | Override the deployed `ConduitEscrow`. |
+| `CONDUIT_ALWAYS_PAY` | — | `1` | Every answer is bought from a peer. `0` restores the original confidence router, where an on-device model answers easy prompts free. |
+| `CONDUIT_HUMAN_PROOF` | — | `1` | Buyer: attach a World human proof when opening a session. Harmless if the seller ignores it. |
+| `CONDUIT_REQUIRE_HUMAN` | — | `0` | Seller: refuse buyers who are not backed by a verified unique human. |
+| `CONDUIT_SUBGRAPH_URL` | — | the profile's | The Graph endpoint for global reputation. Empty disables the global layer. |
 | `CONDUIT_SEED` | — | random | 64-hex seed for a deterministic Hyperswarm identity. |
 | `CONDUIT_SELLER_MNEMONIC` | — | — | Run the seller from a different wallet than the buyer. |
 | `CONDUIT_SELLER_MODEL` | — | prober's pick | Force the seller to serve a specific model. |
 | `CONDUIT_VERIFY` | — | `0` | `1` adds a self-critique pass on confident local answers. |
 | `PORT` | — | `8788` | Web/engine API port. |
 
-> The packaged desktop app ships with escrow **on by default** and the contract address baked in — no
-> `.env` needed for paid answers there.
+> The packaged desktop app needs no `.env` at all: it creates an encrypted keystore on first run and
+> takes its network, token, escrow and subgraph from the selected network profile.
 
 ---
 
-## Contract addresses (Sepolia)
+## Contract addresses
 
-Network: **Ethereum Sepolia** · chain id **`11155111`**.
+Two networks are supported. `CONDUIT_NETWORK` selects one, and each profile pairs its escrow with the
+chain that escrow is deployed on — an address and a chain id can never be configured into disagreeing.
+
+**Arc Testnet** (default) · chain id **`5042002`** · USDC is both the gas token and the settlement token.
+
+| Contract | Address | Explorer |
+|----------|---------|----------|
+| **ConduitEscrow** (payment channels) | `0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2` | [arcscan](https://testnet.arcscan.app/address/0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2) |
+| **USDC** (native, 6-decimal ERC-20 view) | `0x3600000000000000000000000000000000000000` | [arcscan](https://testnet.arcscan.app/address/0x3600000000000000000000000000000000000000) |
+
+**Ethereum Sepolia** · chain id **`11155111`** · the original deployment, kept working.
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
 | **ConduitEscrow** (payment channels) | `0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7` | [etherscan](https://sepolia.etherscan.io/address/0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7) |
 | **Test USD₮** (ERC-20, 6 decimals) | `0xd077A400968890Eacc75cdc901F0356c943e4fDb` | [etherscan](https://sepolia.etherscan.io/address/0xd077A400968890Eacc75cdc901F0356c943e4fDb) |
+
+**World Chain** — [`AgentBook`](https://worldscan.org/address/0xA23aB2712eA7BBa896930544C7d6636a96b944dA)
+`0xA23aB2712eA7BBa896930544C7d6636a96b944dA` is read (never written by this app) to resolve a wallet to
+an anonymous human id.
 
 The escrow contract source is in [`contracts/contracts/ConduitEscrow.sol`](./contracts/contracts/ConduitEscrow.sol)
 (open / topUp / claim / settle / withdraw, EIP-712 vouchers, OpenZeppelin `SafeERC20` + `ReentrancyGuard` +
@@ -299,15 +326,20 @@ The escrow contract source is in [`contracts/contracts/ConduitEscrow.sol`](./con
 
 ## Getting testnet funds
 
-The buyer wallet needs **both**:
+**On Arc (the default), there is one asset to get.** USDC is the gas token *and* the settlement token, so a
+single balance covers opening a channel and paying for answers:
+
+- [faucet.circle.com](https://faucet.circle.com) — Arc testnet USDC.
+
+**On Sepolia**, gas and settlement are different assets and the wallet needs both:
 
 1. **Sepolia ETH** (gas to open/settle the channel) — e.g. [sepoliafaucet.com](https://sepoliafaucet.com),
    the [Alchemy](https://www.alchemy.com/faucets/ethereum-sepolia) or [Infura](https://www.infura.io/faucet/sepolia)
    faucets.
 2. **Test USD₮** (the token above) — from the Pimlico / Candide faucet for the configured token.
 
-> A fresh wallet with USD₮ but **no Sepolia ETH** cannot open a channel — escalation will fall back to a
-> free local answer. Fund gas first.
+> An unfunded wallet cannot open a channel, and since every answer is bought from a peer there is no free
+> local tier to fall back to — the purchase is refused and says so. Fund the wallet first.
 
 ---
 
@@ -480,20 +512,21 @@ Full disclosure: [`REMOTE_APIS.md`](./REMOTE_APIS.md).
 
 1. Provision two machines per [Demo hardware](#demo-hardware) (or run both roles on one box — note the
    shared `~/.qvac/.worker.lock` warning; harmless).
-2. On each: `git clone` → `npm install` → `cp .env.example .env` and set `CONDUIT_RPC_URL`,
-   `CONDUIT_CHAIN_ID=11155111`, `CONDUIT_USDT_ADDRESS=0xd077A400968890Eacc75cdc901F0356c943e4fDb`,
-   `CONDUIT_WALLET_MNEMONIC=<testnet seed>`, and (for instant channels) `CONDUIT_ESCROW=1` +
-   `CONDUIT_ESCROW_ADDRESS=0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7`.
-3. Fund the buyer wallet: Sepolia ETH (gas) + test USD₮.
+2. On each: `git clone` → `npm install` → `cp .env.example .env` and set `CONDUIT_WALLET_MNEMONIC=<testnet
+   seed>`. Nothing else is required — the default network profile (`arc-testnet`) supplies the RPC, the
+   token, the escrow address and the subgraph as a matching set.
+3. Fund the buyer wallet with Arc testnet USDC from [faucet.circle.com](https://faucet.circle.com) — one
+   asset covers both gas and payments.
 4. `npm run bench` on both → each writes its `bench-profile.json` (the Mac picks Qwen3-4B as its tier).
 5. Seller machine: `npm run sell`. Buyer machine: `npm run buy` (or the desktop app / `npm run start`).
-6. Ask an easy question → answered free on-device. Ask a hard one → channel opens, peer is paid, the
-   4B answers over E2E in ~2s. A freeloader process is refused at the handshake.
+6. Ask anything → a channel opens on the first question, the peer is paid, and the 4B answers over E2E
+   in ~2s. Every later answer draws on the same channel with no on-chain wait. A freeloader process is
+   refused at the handshake.
 7. Inspect `AUDIT_LOG.jsonl` for model loads/unloads + per-inference `ttft_ms` / `tps` / tokens, and
    `cloud_bytes:0` throughout. `npm run audit` reproduces the model-lifecycle log with no testnet.
 
 **Expected numbers** (demo hardware): 0.6B local ~8–25 ms TTFT, ~180–290 tok/s · Qwen3-4B ~50 ms TTFT,
-~60–65 tok/s · on-chain settle ~7 s on Sepolia · `cloud_bytes = 0` throughout.
+~60–65 tok/s · channel open ~3 s on Arc, later answers settle off-chain · `cloud_bytes = 0` throughout.
 
 ---
 
