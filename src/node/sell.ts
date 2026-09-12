@@ -158,6 +158,11 @@ swarm.on('connection', (conn: any) => {
   console.log('[seller] buyer connected on storefront');
   send(conn, { type: 'offer', sellerWallet: seller.address, model: offer.model, priceBaseUnits: String(offer.priceBaseUnits), tps: offer.tps, token: cfg.usdtAddress, chainId: cfg.chainId, ...(escrowDep ? { escrow: escrowDep.address } : {}), requireHuman });
   onMessages(conn, async (m) => {
+   // Every branch below answers, on every path. This wrapper is what guarantees it even
+   // when something underneath throws — a buyer has usually already committed an on-chain
+   // deposit by the time we are asked to grant, so going quiet is the one response that
+   // costs them real money and explains nothing.
+   try {
     if (m.type === 'quoteReq') {
       const balanceBefore = await balanceOrNull();
       if (balanceBefore === null) { send(conn, { type: 'reject', reason: 'seller rpc unavailable, retry' }); return; }
@@ -171,6 +176,34 @@ swarm.on('connection', (conn: any) => {
       const pub = await ensureProvider(m.buyerConsumerPub);
       send(conn, { type: 'grant', providerPub: pub });
       console.log('[seller] payment verified → GRANTED, provider', pub.slice(0, 16) + '…');
+    } else if (m.type === 'sessionProbe') {
+      // "Would you serve me, if I paid?" Every check that does not need the channel to
+      // exist yet, run in the same order and with the same reasons as sessionOpen — so a
+      // yes here means the only thing still standing between the buyer and an answer is
+      // the deposit itself.
+      if (!esc) { send(conn, { type: 'sessionProbeAck', ok: false, reason: 'seller does not accept escrow channels' }); return; }
+      if (humanity) {
+        const h = await humanity.verify(m.humanProof, m.buyerWallet, seller.address);
+        if (!h.ok) {
+          console.log('[seller] probe → no (unverified human):', h.reason);
+          send(conn, { type: 'sessionProbeAck', ok: false, reason: 'unverified human' });
+          return;
+        }
+      }
+      if (graphRep) {
+        const rate = graphRep.buyerAbandonmentRate(m.buyerWallet);
+        if (rate > MAX_BUYER_ABANDONMENT) {
+          console.log(`[seller] probe → no (abandonment ${(rate * 100).toFixed(0)}%)`);
+          send(conn, { type: 'sessionProbeAck', ok: false, reason: 'buyer abandonment history' });
+          return;
+        }
+      }
+      // Deliberately NOT starting the provider here. Starting it is what authorizes a
+      // buyer's pubkey through the firewall, and doing that for an unpaid probe would
+      // hand out the grant that payment is supposed to buy. Model health is established
+      // once at startup instead (see preflightModel), before this seller ever advertises.
+      console.log('[seller] probe → yes');
+      send(conn, { type: 'sessionProbeAck', ok: true });
     } else if (m.type === 'sessionOpen') {
       // Verify the buyer's escrow channel on-chain, then grant the gated provider (the channel = the grant).
       if (!esc) { send(conn, { type: 'reject', reason: 'seller does not accept escrow channels' }); return; }
@@ -228,8 +261,48 @@ swarm.on('connection', (conn: any) => {
       emitPending(); // a voucher just landed — surface the earned delta even before it's claimed
       maybeClaim(m.buyerWallet);
     }
+   } catch (e: any) {
+     // Answer with the failure rather than leaving the buyer to time out. 'reject' is the
+     // protocol's way of saying no; the buyer surfaces the reason and can stop waiting.
+     const reason = e?.message ?? String(e);
+     console.error(`[seller] handling '${m.type}' failed: ${reason}`);
+     try { send(conn, { type: 'reject', reason: `seller error: ${reason}` }); } catch { /* conn gone */ }
+   }
   });
 });
+
+/**
+ * Prove this machine can actually serve, before telling anyone it can.
+ *
+ * A seller whose model will not load is indistinguishable from a healthy one in the
+ * marketplace: it announces, it quotes, it passes every economic check. The buyer only
+ * discovers otherwise after committing an on-chain deposit — and then waits out a timeout,
+ * because the failure happens deep inside the grant.
+ *
+ * Starting the provider is what loads the model. The firewall is opened to nobody here, so
+ * this authorizes no one: it answers "can this machine serve?" and nothing else. The
+ * provider is then stopped, leaving the grant path exactly as it was — the first paying
+ * buyer still starts it under a firewall naming only them.
+ */
+async function preflightModel(): Promise<void> {
+  console.log(`[seller] checking ${offer.model} loads on this machine…`);
+  const started = Date.now();
+  const res = await sdk.startQVACProvider({ firewall: { mode: 'allow', publicKeys: [] } });
+  await sdk.stopQVACProvider();
+  console.log(`[seller] ${offer.model} loads OK (${((Date.now() - started) / 1000).toFixed(1)}s) — provider ${String(res.publicKey).slice(0, 16)}…`);
+}
+
+try {
+  await preflightModel();
+} catch (e: any) {
+  // Refuse to advertise. A seller in the marketplace that cannot serve costs buyers real
+  // money — they pay to open a channel and get nothing back — so being absent is strictly
+  // better than being present and broken.
+  console.error(`\n[seller] cannot start ${offer.model}: ${e?.message ?? e}`);
+  console.error('[seller] NOT going online — a seller that cannot serve would take buyers\' deposits and return nothing.');
+  console.error('[seller] fix the model load (see the error above), then start the seller again.\n');
+  process.exit(1);
+}
 
 await swarm.join(TOPIC, { server: true, client: false }).flushed();
 console.log(`[seller] online. offer: ${offer.model} @ ${offer.priceBaseUnits} base-units, ~${offer.tps} tps. wallet ${seller.address}`);

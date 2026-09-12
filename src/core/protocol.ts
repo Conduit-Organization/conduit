@@ -20,6 +20,16 @@ export type Msg =
   // is behind this buyer wallet. Optional on the wire so a seller that does not require
   // it is unaffected and old buyers still interoperate; sellers running with
   // `requireHuman` reject a session that arrives without one. See src/core/humanity.ts.
+  // Asked BEFORE any money moves: "if I opened a channel, would you serve me?" The seller
+  // runs every check that does not depend on the channel existing — its policy on humans,
+  // the buyer's abandonment record, whether its own model is actually loadable — and
+  // answers plainly. Opening a channel costs a real on-chain deposit, so a buyer who is
+  // going to be refused must find out while that still costs nothing.
+  //
+  // Optional on the wire in both directions: a seller too old to know this message simply
+  // never answers, and the buyer proceeds as it always did after a short wait.
+  | { type: 'sessionProbe'; buyerWallet: string; humanProof?: HumanProof }
+  | { type: 'sessionProbeAck'; ok: boolean; reason?: string }
   | { type: 'sessionOpen'; buyerConsumerPub: string; buyerWallet: string; epoch: string; humanProof?: HumanProof }
   | { type: 'sessionGrant'; providerPub: string; epoch: string }
   // Per inference: buyer sends a cumulative EIP-712 voucher (instant). Seller verifies + serves;
@@ -29,6 +39,18 @@ export type Msg =
 
 export function send(conn: any, msg: Msg): void {
   conn.write(Buffer.from(JSON.stringify(msg) + '\n'));
+}
+
+/**
+ * Called when a message handler rejects. Replaceable so a node can route it into its own
+ * log; the default makes sure it is never silent.
+ */
+let onHandlerError: (m: Msg, e: Error) => void = (m, e) => {
+  console.error(`[wire] handler for '${m.type}' threw and sent no reply: ${e.message}`);
+};
+
+export function setHandlerErrorReporter(fn: (m: Msg, e: Error) => void): void {
+  onHandlerError = fn;
 }
 
 export function onMessages(conn: any, handler: (m: Msg) => void | Promise<void>): void {
@@ -42,7 +64,18 @@ export function onMessages(conn: any, handler: (m: Msg) => void | Promise<void>)
       if (!line) continue;
       let m: Msg;
       try { m = JSON.parse(line) as Msg; } catch { continue; }
-      void handler(m);
+      // A handler that throws used to vanish here. The peer was then left waiting on a
+      // reply that would never come, and the only symptom anywhere was a timeout on the
+      // other side — which is how a buyer paid for a channel and then watched a seller
+      // say nothing at all. Surface it; the handler still owns answering.
+      // try/catch AND .catch: a synchronous throw never reaches Promise.resolve, and an
+      // async rejection never reaches the try. Both have to be covered.
+      const report = (e: unknown) => onHandlerError(m, e instanceof Error ? e : new Error(String(e)));
+      try {
+        Promise.resolve(handler(m)).catch(report);
+      } catch (e) {
+        report(e);
+      }
     }
   });
   conn.on('error', () => {});

@@ -180,6 +180,8 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
       resolvePending(rec, 'grant', m);
     } else if (m.type === 'sessionGrant') {
       resolvePending(rec, 'sessionGrant', m);
+    } else if (m.type === 'sessionProbeAck') {
+      resolvePending(rec, 'sessionProbeAck', m);
     } else if (m.type === 'drawAck') {
       resolvePending(rec, 'drawAck', m);
     } else if (m.type === 'reject') {
@@ -258,6 +260,41 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
   }
 
   // Open (or resume) an escrow channel to this seller and get the granted provider pubkey.
+  /**
+   * "Would you serve me, if I paid?" — asked before the deposit.
+   *
+   * Returns null when the seller says nothing, which is what a seller too old to know this
+   * message does. That case must stay silent-and-proceed rather than fail: refusing to buy
+   * from an older peer would be a worse outcome than the wasted deposit this is avoiding.
+   * The wait is short for the same reason — it is on the path of every first purchase.
+   */
+  async function probeSeller(rec: ConnRec, offer: SellerOffer, epoch: string): Promise<{ ok: boolean; reason?: string } | null> {
+    if (!escrowWallet) return null;
+    let humanProof: HumanProof | undefined;
+    if (deps.humanity) {
+      try {
+        humanProof = await deps.humanity.prove(
+          escrowWallet.address,
+          offer.sellerWallet,
+          (msg) => escrowWallet!.signMessage(msg),
+          { epoch }
+        );
+      } catch { /* no proof — the seller decides whether it cares */ }
+    }
+    send(rec.conn, { type: 'sessionProbe', buyerWallet: escrowWallet.address, humanProof });
+    try {
+      const ack = await waitFor(rec, 'sessionProbeAck', 15_000);
+      return { ok: !!ack.ok, reason: ack.reason };
+    } catch (e: any) {
+      // Only a TIMEOUT means "this seller does not speak probe" — proceed as before.
+      // A 'reject' arriving instead is a real refusal and rejects every pending wait, so
+      // treating it as silence here would pay a seller that has just said no.
+      const msg = String(e?.message ?? e);
+      if (msg.startsWith('timeout waiting for')) return null;
+      return { ok: false, reason: msg.replace(/^seller rejected: /, '') };
+    }
+  }
+
   async function ensureSession(rec: ConnRec, offer: SellerOffer): Promise<SessionState> {
     const key = offer.sellerWallet.toLowerCase();
     // small safety margin so we never start a draw against a channel that expires moments later
@@ -284,6 +321,13 @@ export async function createStorefront(deps: StorefrontDeps): Promise<Storefront
     }
 
     if (!ch.open) {
+      // Ask before paying. Opening a channel is a real on-chain deposit, and every reason
+      // a seller might refuse — its policy on human proofs, this buyer's abandonment
+      // record — is knowable before a single unit moves. A buyer who is going to be turned
+      // away should find that out while it still costs nothing.
+      const verdict = await probeSeller(rec, offer, ch.epoch.toString());
+      if (verdict && !verdict.ok) throw new Error(`seller rejected: ${verdict.reason ?? 'seller declined'}`);
+
       log(`[storefront] opening escrow channel → ${offer.sellerWallet.slice(0, 10)}… (deposit ${deposit})`);
       await esc.open(escrowWallet, offer.token, offer.sellerWallet, deposit, duration);
       ch = await esc.channel(escrowWallet.address, offer.sellerWallet);
