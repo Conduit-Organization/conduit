@@ -16,6 +16,7 @@
 // halves together are the whole claim: the gate refuses everyone it should, and admits
 // exactly one wallet, for a reason that lives on World Chain rather than in our code.
 import { Wallet } from 'ethers';
+import { loadEnv } from '../core/env';
 import { createHumanity, resourceUriFor, WORLD_CHAIN_ID } from '../core/humanity';
 
 const AGENT_BOOK_WORLDCHAIN = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA';
@@ -97,7 +98,11 @@ async function main(): Promise<void> {
   );
 
   // ── the ACCEPT path, when a registered wallet is available ──
-  const demoKey = process.env.CONDUIT_DEMO_BUYER_KEY;
+  // Read .env the same way the engine does, so a key configured there is actually used.
+  // It was being ignored, and the accept path silently skipped itself while a perfectly
+  // good registered wallet sat in the file.
+  const envFile = loadEnv();
+  const demoKey = process.env.CONDUIT_DEMO_BUYER_KEY ?? envFile.CONDUIT_DEMO_BUYER_KEY;
   if (demoKey) {
     console.log('\nRegistered buyer (the accept path):');
     const registered = new Wallet(demoKey.startsWith('0x') ? demoKey : `0x${demoKey}`);
@@ -152,7 +157,7 @@ async function main(): Promise<void> {
   // two wallets backed by the same person resolve to the same identifier — which is a
   // property of World ID, not of our code. CONDUIT_SECOND_WALLET lets this be checked
   // against two genuinely registered addresses rather than a stub.
-  const second = process.env.CONDUIT_SECOND_WALLET;
+  const second = process.env.CONDUIT_SECOND_WALLET ?? envFile.CONDUIT_SECOND_WALLET;
   if (demoKey && second) {
     const first = new Wallet(demoKey.startsWith('0x') ? demoKey : `0x${demoKey}`).address;
     const idA = await humanity.humanId(first);
@@ -170,12 +175,24 @@ async function main(): Promise<void> {
     }
   }
 
+  // The claim has to match what actually ran. Without a registered wallet this can only
+  // show the gate refusing; with one it shows the SAME gate admitting, which is the
+  // stronger statement and must not be reported as still hypothetical.
   console.log('\nWhat this proves:');
-  console.log('  The signature, freshness, seller-binding and replay checks all PASS for');
-  console.log('  the genuine proof — it is refused solely at the AgentBook lookup, which is');
-  console.log('  a live read of World Chain. Register that wallet with');
-  console.log('    npx @worldcoin/agentkit-cli register <address>');
-  console.log('  and the same proof is accepted, with no code change.\n');
+  if (demoKey) {
+    console.log('  One ladder, two outcomes, both read live from World Chain: an unregistered');
+    console.log('  wallet is refused at the AgentBook lookup, and a registered one is admitted');
+    console.log('  — with no code change between the two, only the registration.');
+    console.log('  Every other check (signature, freshness, seller-binding, replay) refuses a');
+    console.log('  human-backed proof just as firmly as an unbacked one, so personhood buys');
+    console.log('  admission and nothing else.\n');
+  } else {
+    console.log('  The signature, freshness, seller-binding and replay checks all PASS for');
+    console.log('  the genuine proof — it is refused solely at the AgentBook lookup, which is');
+    console.log('  a live read of World Chain. Register that wallet with');
+    console.log('    npx @worldcoin/agentkit-cli register <address>');
+    console.log('  and the same proof is accepted, with no code change.\n');
+  }
 
   console.log(`${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
