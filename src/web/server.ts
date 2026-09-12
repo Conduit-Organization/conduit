@@ -637,6 +637,15 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // Redeem outstanding vouchers on demand. Claims are batched at a threshold so a seller
+    // is not paying gas per answer; this is for the seller who wants their money now and
+    // should not have to serve more inferences to trigger it.
+    if (req.method === 'POST' && p === '/api/seller/claim') {
+      const started = seller.claimNow();
+      json(res, started ? 200 : 409, started ? { ok: true } : { error: 'no seller is running' });
+      return;
+    }
+
     // ---------- ask ----------
     if (req.method === 'POST' && p === '/api/ask') {
       const { prompt } = await readBody(req);

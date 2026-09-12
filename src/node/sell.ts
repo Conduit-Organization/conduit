@@ -187,6 +187,36 @@ function emitPending() {
 }
 
 // Background redeem — never blocks serving the buyer; fire-and-forget when earnings cross the threshold.
+/**
+ * Redeem every outstanding voucher now, whatever the batch threshold says.
+ *
+ * Claims are normally batched at CLAIM_THRESHOLD so a seller is not paying gas per answer.
+ * That is right for running a node and wrong for someone who wants their money — waiting
+ * for enough inferences to accumulate is not a reason to leave earnings unredeemed. The
+ * seller screen can ask for this directly.
+ */
+async function claimAll(): Promise<void> {
+  if (!esc || !escrowWallet) { console.log('[seller] claim-now: escrow is not configured'); return; }
+  const owed = [...sessions.entries()].filter(([, s]) => s.cumulative > s.claimed && !s.claiming);
+  if (!owed.length) { console.log('[seller] claim-now: nothing to redeem'); return; }
+
+  for (const [buyerWallet, s] of owed) {
+    s.claiming = true;
+    const target = s.cumulative, sig = s.lastSig;
+    try {
+      const tx = await esc.claim(escrowWallet, buyerWallet, target, sig);
+      s.claimed = target;
+      console.log(`[seller] claimed ${target} on-chain (tx ${tx.slice(0, 12)}…)`);
+    } catch (e: any) {
+      // Say why. The usual cause is no gas, and on Arc that is the same asset being earned.
+      console.log('[seller] claim-now failed:', e?.shortMessage ?? e?.message ?? e);
+    } finally {
+      s.claiming = false;
+    }
+  }
+  emitPending();
+}
+
 function maybeClaim(buyerWallet: string) {
   const s = sessions.get(buyerWallet.toLowerCase());
   if (!s || !esc || !escrowWallet || s.claiming) return;
@@ -456,6 +486,17 @@ await swarm.join(TOPIC, { server: true, client: false }).flushed();
 console.log(`[seller] online. offer: ${offer.model} @ ${offer.priceBaseUnits} base-units, ~${offer.tps} tps. wallet ${seller.address}`);
 
 async function shutdown() { try { await sdk.stopQVACProvider(); } catch {} try { await sdk.close(); } catch {} try { await swarm.destroy(); } catch {} process.exit(0); }
+// Commands from the engine that spawned us. The engine has no other channel to this
+// process — it only reads our stdout — so a one-word line on stdin is how the seller screen
+// reaches the node it is describing.
+process.stdin.on('data', (b: Buffer) => {
+  for (const line of b.toString().split('\n')) {
+    const cmd = line.trim();
+    if (cmd === 'claim') void claimAll();
+  }
+});
+process.stdin.on('error', () => { /* no stdin attached (CLI use) — nothing to listen to */ });
+
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 

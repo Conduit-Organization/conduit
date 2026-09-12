@@ -162,7 +162,8 @@ export interface SellerStatus {
   tps: number | null;
   address: string | null;
   requestsServed: number;
-  earned: string | null; // base-units, on-chain delta since going online
+  earned: string | null; // base units owed for answers served this session (served × price)
+  pending?: string | null; // of that, still unredeemed as signed vouchers
   startedAt: number | null;
   error: string | null;
   /** ETHOnline 2026 — this seller only admits World-verified humans. Seller policy. */
@@ -244,6 +245,12 @@ export async function getSellerStatus(): Promise<SellerStatus> {
   if (!r.ok) throw new Error(`seller status ${r.status}`);
   return r.json();
 }
+/** Redeem the seller's outstanding vouchers now, instead of waiting for the batch threshold. */
+export async function claimSellerEarnings(): Promise<void> {
+  const r = await fetch('/api/seller/claim', { method: 'POST' });
+  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as any).error ?? 'claim failed');
+}
+
 export async function getSellerProfile(): Promise<SellerProfile> {
   const r = await fetch('/api/seller/profile');
   if (!r.ok) throw new Error(`seller profile ${r.status}`);

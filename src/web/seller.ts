@@ -16,7 +16,8 @@ export interface SellerStatus {
   tps: number | null;
   address: string | null; // earnings address (seller account index 1)
   requestsServed: number;
-  earned: string | null; // on-chain USD₮ delta since going online (base-units), best-effort
+  earned: string | null; // base units owed for answers served this session (served × price)
+  pending: string | null; // of that, still unredeemed as signed vouchers
   startedAt: number | null;
   error: string | null;
   /**
@@ -42,6 +43,8 @@ export interface SellerManager {
   start(mnemonic: string, model?: string, opts?: { requireHuman?: boolean }): Promise<SellerStatus>;
   stop(): Promise<void>;
   status(): SellerStatus;
+  /** Redeem outstanding vouchers now, bypassing the batch threshold. False = nothing running. */
+  claimNow(): boolean;
 }
 
 // `[seller] online. offer: QWEN3_4B_INST_Q4_K_M @ 10000 base-units, ~59 tps. wallet 0x…`
@@ -55,6 +58,12 @@ function sellerSpawnSpec(repoRoot: string): { command: string; args: string[]; c
   }
   // Dev path: run the seller from source via tsx.
   return {
+    /**
+     * Ask the running seller to redeem its outstanding vouchers immediately.
+     *
+     * Returns false when there is nothing running to ask — the caller reports that rather
+     * than pretending a claim was started.
+     */
     command: process.platform === 'win32' ? 'node.exe' : 'node',
     args: ['--import', 'tsx', 'src/node/sell.ts'],
     cwd: repoRoot,
@@ -71,12 +80,12 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
 
   const st: SellerStatus = {
     running: false, online: false, model: null, price: null, tps: null,
-    address: null, requestsServed: 0, earned: null, startedAt: null, error: null, requireHuman: false,
+    address: null, requestsServed: 0, earned: null, pending: null, startedAt: null, error: null, requireHuman: false,
   };
 
   function reset() {
     st.running = false; st.online = false; st.model = null; st.price = null; st.tps = null;
-    st.address = null; st.requestsServed = 0; st.earned = null; st.startedAt = null;
+    st.address = null; st.requestsServed = 0; st.earned = null; st.pending = null; st.startedAt = null;
     earnings = null; earnedAtStart = null; earnedNow = null; pendingBaseUnits = 0n;
   }
 
@@ -84,14 +93,17 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
   // channel vouchers. The two stay continuous: when a batch claim settles, pending drops exactly as
   // the on-chain balance rises, so the total never double-counts or jumps.
   function recomputeEarned() {
-    const onChainDelta = earnedAtStart !== null ? (earnedNow ?? earnedAtStart) - earnedAtStart : 0n;
-    const settledPlusPending = onChainDelta + pendingBaseUnits;
-    // The session "earned" tile must track answers actually served, even when settlement is batched
-    // (escrow claims only at CLAIM_THRESHOLD) or an on-chain balance read is flaky. Each served
-    // inference earns exactly `price`, so served × price is the floor; surface the larger of it and
-    // the on-chain-settled + pending figure so the tile never lags behind requestsServed.
-    const servedValue = st.price ? BigInt(st.requestsServed) * BigInt(st.price) : 0n;
-    st.earned = (settledPlusPending > servedValue ? settledPlusPending : servedValue).toString();
+    // Earned = what buyers owe for what was served. Each served inference earns exactly
+    // `price`, in both settlement modes, so this is the exact figure rather than a proxy.
+    //
+    // It used to be derived from the on-chain balance delta instead, taking the larger of
+    // that and served × price. Any increase in the earnings wallet therefore counted as
+    // revenue — so funding that wallet with 20 USDC of gas made the dashboard report
+    // "20.0 USDC earned" beside "6 requests served". The money was right; the claim about
+    // where it came from was not.
+    st.earned = (st.price ? BigInt(st.requestsServed) * BigInt(st.price) : 0n).toString();
+    // Unclaimed vouchers, shown separately: earned but not yet redeemed on-chain.
+    st.pending = pendingBaseUnits.toString();
   }
 
   function ingest(line: string) {
@@ -144,7 +156,7 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
       earnings = await deps.makeEarningsAccount(mnemonic);
       earnedAtStart = await earnings.tokenBalance(deps.usdtAddress);
       earnedNow = earnedAtStart;
-      st.earned = '0';
+      st.earned = '0'; st.pending = '0';
     } catch (e: any) {
       earnedAtStart = null; // earnings reporting degrades gracefully if the RPC is flaky
       log(`[seller-mgr] could not snapshot starting balance: ${e?.message ?? e}`);
@@ -162,7 +174,8 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
         ...(process.env.CONDUIT_SELLER_ENTRY ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
         QVAC_HYPERSWARM_SEED: '', // let sell.ts pick its own provider identity (don't inherit the buyer's)
       },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      // stdin is the command channel (claim now); stdout/stderr are the log we ingest.
+      stdio: ['pipe', 'pipe', 'pipe'],
       detached: process.platform !== 'win32',
     });
     child = proc;
@@ -213,5 +226,19 @@ export function createSellerManager(deps: SellerManagerDeps): SellerManager {
     return { ...st };
   }
 
-  return { start, stop, status };
+  /**
+   * Ask the running seller to redeem its outstanding vouchers now.
+   *
+   * Claims are otherwise batched at a threshold so a seller is not paying gas per answer —
+   * correct for running a node, wrong for someone who just wants their money. Returns false
+   * when there is no seller running to ask, so the caller can say that rather than imply a
+   * claim was started.
+   */
+  function claimNow(): boolean {
+    if (!child || !st.running || !child.stdin?.writable) return false;
+    child.stdin.write('claim\n');
+    return true;
+  }
+
+  return { start, stop, status, claimNow };
 }

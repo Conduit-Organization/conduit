@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSymbol, useNetworkLabel } from '../symbol';
-import { getSellerProfile, type SellerStatus, type SellerProfile } from '../api';
+import { getSellerProfile, claimSellerEarnings, type SellerStatus, type SellerProfile } from '../api';
 import { Gpu } from './icons';
 import { short, modelName } from '../format';
 
@@ -25,6 +25,17 @@ export default function SellerScreen({
   onStop: () => void;
 }) {
   const sym = useSymbol();
+  const [claiming, setClaiming] = useState(false);
+  const [claimErr, setClaimErr] = useState('');
+  const unclaimed = Number(status?.pending ?? 0);
+
+  const claim = useCallback(async () => {
+    setClaimErr(''); setClaiming(true);
+    try { await claimSellerEarnings(); }
+    catch (e) { setClaimErr(e instanceof Error ? e.message : String(e)); }
+    // The claim is submitted by the seller process; the tile updates when it reports back.
+    finally { setTimeout(() => setClaiming(false), 4000); }
+  }, []);
   const netLabel = useNetworkLabel();
   const [profile, setProfile] = useState<SellerProfile | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -206,6 +217,22 @@ export default function SellerScreen({
             <div className="ss-k">earnings address</div>
           </div>
         </div>
+        {/* Unclaimed vouchers, and a way to redeem them without serving more answers.
+            Claims batch at a threshold so a seller is not paying gas per inference — right
+            for running a node, wrong for someone who just wants their money. */}
+        {unclaimed > 0 && (
+          <div className="ss-claim">
+            <div>
+              <b>{usdtFromBaseUnits(status?.pending ?? null)} {sym}</b> earned but not yet redeemed —
+              held as signed vouchers, settled on-chain in batches.
+            </div>
+            <button className="gate-btn" onClick={claim} disabled={claiming}>
+              {claiming ? 'Claiming…' : 'Claim now'}
+            </button>
+          </div>
+        )}
+        {claimErr && <div className="ss-claim-err">{claimErr}</div>}
+
         <div className="ss-note">
           Earnings land in account #1 of your wallet ({short(status?.address ?? null)}). Buyers pay this
           address directly on <b>{netLabel}</b>.
