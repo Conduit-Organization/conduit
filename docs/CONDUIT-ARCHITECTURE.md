@@ -214,6 +214,69 @@ stateDiagram-v2
 
 ---
 
+## 8. The Continuity layer (ETHOnline 2026)
+
+The market above works, and settles, and refuses freeloaders. What it could not do was
+help a buyer who had never met a seller before — a stranger scored a flat 0.5, so "Auto"
+quietly degraded into price-then-speed. The obvious fix, counting settlements per address,
+is worthless on its own: addresses are free, so a seller can be its own thousand happy
+customers.
+
+Three integrations close three different halves of that problem, and none of them is
+sufficient alone.
+
+```mermaid
+flowchart TB
+  subgraph GAP["THE GAP IN THE ORIGINAL MARKET"]
+    direction LR
+    G1["A buyer meeting a seller for the first time<br/>has no evidence about them — every<br/>stranger scores a flat 0.5"]
+    G2["Reputation built from addresses is free<br/>to forge — one actor can be a thousand<br/>satisfied customers"]
+    G3["A seller earns one asset and pays gas<br/>in another, so revenue does not cover costs"]
+  end
+
+  subgraph ARC["ARC — settlement"]
+    direction TB
+    A1["ConduitEscrow payment channel<br/>0xdC48E5e5…632C2 · chain 5042002"]
+    A2["open → EIP-712 vouchers off-chain → settle<br/>one on-chain write per session, not per answer"]
+    A3["USDC is BOTH the gas token and the<br/>settlement token — one balance, one asset"]
+    A1 --> A2 --> A3
+  end
+
+  subgraph GRAPH["THE GRAPH — reputation"]
+    direction TB
+    R1["Subgraph indexes every channel the<br/>escrow has ever opened, settled or withdrawn"]
+    R2["Settled / Withdrawn / Renewal / Probe<br/>classified, not merely counted"]
+    R3["A first-time buyer reads how a seller<br/>treated EVERYONE, before paying anything"]
+    R1 --> R2 --> R3
+  end
+
+  subgraph WORLD["WORLD — personhood"]
+    direction TB
+    W1["AgentBook on World Chain<br/>0xA23aB271…944dA"]
+    W2["wallet → anonymous humanId<br/>many wallets, one person"]
+    W3["Sellers may require a verified human;<br/>breadth counts PEOPLE, not keypairs"]
+    W1 --> W2 --> W3
+  end
+
+  G3 ==>|"closed by"| ARC
+  G1 ==>|"closed by"| GRAPH
+  G2 ==>|"closed by"| WORLD
+
+  ARC -->|"emits the events"| GRAPH
+  WORLD -->|"makes the record<br/>expensive to forge"| GRAPH
+  GRAPH ==>|"score a seller a buyer has never met"| PICK["Auto picks a seller<br/>reputation → price → speed"]
+  PICK ==> PAY["Answer bought, channel drawn,<br/>receipt shown in USDC"]
+  ARC ==> PAY
+```
+
+*Arc is where value actually moves, and its one-asset model (USDC is both gas and
+settlement) is what lets a seller's revenue cover a seller's costs. The Graph turns the
+escrow's event log into a record a stranger can read before paying. World is what makes
+that record expensive to forge — without it, the reputation layer would be a
+sybil amplifier rather than a defence.*
+
+---
+
 ### Diagram → plan-section map
 | Diagram | Plan section |
 |---|---|
@@ -224,3 +287,4 @@ stateDiagram-v2
 | 5 Capability Prober | §3.0 |
 | 6 Payment→grant mechanism | §4.1 |
 | 7 Session lifecycle | §2 + §4.4 |
+| 8 Continuity layer (Arc / Graph / World) | ETHOnline 2026 |

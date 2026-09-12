@@ -16,6 +16,7 @@ Each diagram is stored as **three separate files**:
 | 05 | `05-capability-prober` | `conduit bench`: how a node self-benchmarks a model ladder and decides what it can sell | §3.0 |
 | 06 | `06-payment-grant-mechanism` | Payment→grant lifecycle: Mechanism A vs A′ vs app-layer fallback, chosen by Spike #1 | §4.1 |
 | 07 | `07-session-lifecycle` | State machine: Advertising → QuoteIssued → PaymentVerified → ProviderLive → Serving → Settled (+ Rejected) | §2, §4.4 |
+| 08 | `08-continuity-layer` | ETHOnline 2026: the three gaps in the original market, and which sponsor closes each — Arc (settlement), The Graph (reputation), World (personhood) | — |
 
 ## View
 Open any `.svg` in a browser or VS Code (no extension needed for SVG). For the `.mmd` source with live preview, use the VS Code "Mermaid" extension, Obsidian, or https://mermaid.live.

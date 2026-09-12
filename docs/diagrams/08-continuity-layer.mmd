@@ -1,0 +1,43 @@
+%% Conduit — ETHOnline 2026 Continuity layer.
+%% What the original market was missing, and which sponsor closes each gap.
+flowchart TB
+  subgraph GAP["THE GAP IN THE ORIGINAL MARKET"]
+    direction LR
+    G1["A buyer meeting a seller for the first time<br/>has no evidence about them — every<br/>stranger scores a flat 0.5"]
+    G2["Reputation built from addresses is free<br/>to forge — one actor can be a thousand<br/>satisfied customers"]
+    G3["A seller earns one asset and pays gas<br/>in another, so revenue does not cover costs"]
+  end
+
+  subgraph ARC["ARC — settlement"]
+    direction TB
+    A1["ConduitEscrow payment channel<br/>0xdC48E5e5…632C2 · chain 5042002"]
+    A2["open → EIP-712 vouchers off-chain → settle<br/>one on-chain write per session, not per answer"]
+    A3["USDC is BOTH the gas token and the<br/>settlement token — one balance, one asset"]
+    A1 --> A2 --> A3
+  end
+
+  subgraph GRAPH["THE GRAPH — reputation"]
+    direction TB
+    R1["Subgraph indexes every channel the<br/>escrow has ever opened, settled or withdrawn"]
+    R2["Settled / Withdrawn / Renewal / Probe<br/>classified, not merely counted"]
+    R3["A first-time buyer reads how a seller<br/>treated EVERYONE, before paying anything"]
+    R1 --> R2 --> R3
+  end
+
+  subgraph WORLD["WORLD — personhood"]
+    direction TB
+    W1["AgentBook on World Chain<br/>0xA23aB271…944dA"]
+    W2["wallet → anonymous humanId<br/>many wallets, one person"]
+    W3["Sellers may require a verified human;<br/>breadth counts PEOPLE, not keypairs"]
+    W1 --> W2 --> W3
+  end
+
+  G3 ==>|"closed by"| ARC
+  G1 ==>|"closed by"| GRAPH
+  G2 ==>|"closed by"| WORLD
+
+  ARC -->|"emits the events"| GRAPH
+  WORLD -->|"makes the record<br/>expensive to forge"| GRAPH
+  GRAPH ==>|"score a seller a buyer has never met"| PICK["Auto picks a seller<br/>reputation → price → speed"]
+  PICK ==> PAY["Answer bought, channel drawn,<br/>receipt shown in USDC"]
+  ARC ==> PAY
