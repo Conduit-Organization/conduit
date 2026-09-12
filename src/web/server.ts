@@ -77,6 +77,54 @@ const policy = new SpendPolicy(MAX_PER_CALL, MAX_BUDGET);
 // Escrow (payment-channel) mode is opt-in: CONDUIT_ESCROW=1 + a deployed contract. The seller child
 // inherits CONDUIT_ESCROW via the spawned env, so enabling it here turns it on for both roles.
 const escrowDep = cfg.escrow ? loadEscrowDeployment(cfg.network.name) : null;
+
+// Escrow preflight — prove the deployment is real on the chain we are about to use.
+//
+// The failure this replaces was invisible until someone tried to buy something: an address
+// belonging to a different network decodes as `0x`, and ethers reports only
+// "could not decode result data". By then the buyer has picked a seller, opened a thread,
+// and typed a question. Checking at startup turns that into one line in the log and a
+// visible state in the UI, before any of that effort is spent.
+//
+// This never blocks boot. A slow or unreachable RPC must not stop the app from starting,
+// so an inconclusive check reports `null` and simply says nothing.
+let escrowReady: { ok: boolean; reason: string | null } | null = null;
+async function preflightEscrow(): Promise<void> {
+  if (!escrowDep) return;
+  try {
+    const { JsonRpcProvider } = await import('ethers');
+    const provider = new JsonRpcProvider(cfg.rpcUrl);
+
+    // 1. Is the RPC actually serving the chain the config claims? A mismatch here means
+    //    every address we hold is being asked of the wrong ledger.
+    const net = await provider.getNetwork();
+    const live = Number(net.chainId);
+    if (live !== escrowDep.chainId) {
+      escrowReady = { ok: false, reason: `RPC serves chain ${live}, but the escrow is deployed on ${escrowDep.chainId}` };
+      console.error(`[escrow] PREFLIGHT FAILED — ${escrowReady.reason}`);
+      console.error('[escrow] purchases will fail until CONDUIT_NETWORK and the RPC agree.');
+      return;
+    }
+
+    // 2. Does anything actually live at that address on this chain? This is the exact
+    //    condition that produced the empty return.
+    const code = await provider.getCode(escrowDep.address);
+    if (!code || code === '0x') {
+      escrowReady = { ok: false, reason: `no contract at ${escrowDep.address} on chain ${live}` };
+      console.error(`[escrow] PREFLIGHT FAILED — ${escrowReady.reason}`);
+      return;
+    }
+
+    escrowReady = { ok: true, reason: null };
+    console.log(`[escrow] preflight ok — ${escrowDep.address} live on chain ${live} (${cfg.network.label})`);
+  } catch (e) {
+    // Inconclusive, not failed. Saying "broken" because the RPC blinked would be worse
+    // than saying nothing.
+    console.log('[escrow] preflight inconclusive:', e instanceof Error ? e.message : String(e));
+    escrowReady = null;
+  }
+}
+void preflightEscrow();
 // ── ETHOnline 2026 ─────────────────────────────────────────────────────────────
 // First-party reputation (what I myself experienced) is unchanged and still the
 // authority once it has evidence. The Graph layer wraps it to fill the cold-start hole:
@@ -321,6 +369,9 @@ function integrationsJson() {
       escrow: escrowDep?.address ?? null,
       explorer: cfg.network.explorer,
       escrowUrl: escrowDep ? `${cfg.network.explorer}/address/${escrowDep.address}` : null,
+      // null = not checked yet or inconclusive; the UI says nothing in that case.
+      escrowVerified: escrowReady ? escrowReady.ok : null,
+      escrowError: escrowReady?.reason ?? null,
     },
     graph: {
       ...graphStatusJson(),

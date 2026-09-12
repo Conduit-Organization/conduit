@@ -38,9 +38,16 @@ export default function Integrations({ state }: { state: State | null }) {
               {i.arc.escrowUrl
                 ? <a href={i.arc.escrowUrl} target="_blank" rel="noreferrer">{short(i.arc.escrow ?? '')}</a>
                 : <span className="ig-off">not deployed</span>}
+              {/* Confirmed by reading the chain at startup, not assumed from config. */}
+              {i.arc.escrowVerified === true && <span className="ig-ok ig-chk" title="contract verified live on this chain"> ✓</span>}
             </dd>
             <dt>token</dt><dd>{short(i.arc.settlementToken)}</dd>
           </dl>
+          {i.arc.escrowVerified === false && (
+            <p className="ig-bad">
+              Escrow unreachable — {i.arc.escrowError}. Purchases will fail until this is fixed.
+            </p>
+          )}
         </div>
 
         {/* ── The Graph: the record a buyer reads before choosing ───────── */}

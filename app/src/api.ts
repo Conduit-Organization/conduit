@@ -54,6 +54,8 @@ export interface Integrations {
     escrow: string | null;
     explorer: string;
     escrowUrl: string | null;
+    escrowVerified?: boolean | null;
+    escrowError?: string | null;
   };
   graph: GraphStatus & { endpoint: string | null; network: string | null };
   world: HumanStatus & {

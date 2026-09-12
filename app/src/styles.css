@@ -842,6 +842,15 @@ body::after {
 .ig-facts a { color: var(--mint); }
 .ig-ok { color: var(--mint); }
 .ig-off { color: var(--amber); }
+.ig-chk { font-weight: 600; }
+/* A broken escrow is the one condition here that makes the product unusable, so it reads
+   as an alert rather than as another fact in the list. */
+.ig-bad {
+  margin: 8px 0 0; padding: 7px 9px; border-radius: 7px;
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red) 34%, transparent);
+  color: var(--red); font-size: 11px; line-height: 1.45;
+}
 
 /* --- ETHOnline 2026: a seller's refusal, rendered as a decision not a crash -- */
 .refusal { border-left: 2px solid var(--amber); padding: 2px 0 2px 11px; }
