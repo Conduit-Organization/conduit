@@ -443,10 +443,21 @@ npm run audit               # loads models, runs inference, unloads — writes A
 | `npm run agent` | autonomous buyer: confidence router + spend policy (free / pay / budget-decline) |
 | `npm run route` | confidence router on easy vs. hard prompts (self-consistency, no logprobs) |
 | `npm run bench` | capability prober — benchmarks the local GPU, writes `bench-profile.json` |
-| `npm run escrow-demo` | open a channel, draw vouchers, settle — end to end on Sepolia |
+| `npm run escrow-demo` | open a channel, draw vouchers, settle — end to end on the selected network |
 | `npm run slice` | Phase-1 thin vertical slice (hand-scripted pay→gate→delegate→reject) |
 | `npm run spike:firewall` / `spike:settle` / `spike:delegate` | the de-risking spikes |
 | `npm run typecheck` | TypeScript check (engine) |
+| `npm test` | engine unit tests (node:test, no network) |
+
+**Verifying the three integrations.** Each of these reads a live chain or endpoint and prints what it
+found — none of them takes anything on trust from this repo:
+
+| Command | What it proves |
+|---------|----------------|
+| `npm run arc-e2e` | the whole payment rail on Arc in USDC: approve → open → sign vouchers → claim → settle → balances reconcile. Needs `CONDUIT_DEPLOYER_KEY` (a funded key). |
+| `npm run graph-check` | the subgraph is synced and its settlement history satisfies the invariants the reputation layer depends on |
+| `npm run humanity-check` | the World gate, read live from AgentBook on World Chain: an unregistered wallet is refused and a registered one admitted, with signature / freshness / seller-binding / replay refusing both alike |
+| `npm run attack-demo` | buys a seller's reputation with forged signals, then shows the hardened rules and the human gate pricing the same attack in people rather than gas |
 
 ---
 
