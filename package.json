@@ -25,6 +25,7 @@
     "audit": "tsx src/scripts/audit-demo.ts",
     "escrow-demo": "tsx src/scripts/escrow-demo.ts",
     "humanity-check": "tsx src/scripts/humanity-check.ts",
+    "seller-check": "tsx src/scripts/seller-check.ts",
     "graph-check": "tsx src/scripts/graph-check.ts",
     "arc-e2e": "tsx src/scripts/arc-e2e.ts",
     "attack-demo": "tsx src/scripts/attack-demo.ts",

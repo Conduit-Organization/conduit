@@ -4,8 +4,9 @@
 // quote (single-use nonce) → verify a signed, on-chain-confirmed payment → open a firewall-gated
 // QVAC provider for exactly that buyer → grant the provider pubkey. No orchestrator.
 import crypto from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 import path from 'node:path';
 import Hyperswarm from 'hyperswarm';
 import { verifyMessage, JsonRpcProvider, HDNodeWallet, type BaseWallet } from 'ethers';
@@ -272,37 +273,47 @@ swarm.on('connection', (conn: any) => {
 });
 
 /**
- * Prove this machine can actually serve, before telling anyone it can.
+ * Clear a worker lock left behind by a killed run.
  *
- * A seller whose model will not load is indistinguishable from a healthy one in the
- * marketplace: it announces, it quotes, it passes every economic check. The buyer only
- * discovers otherwise after committing an on-chain deposit — and then waits out a timeout,
- * because the failure happens deep inside the grant.
+ * QVAC serialises access to its bare worker with `~/.qvac/.worker.lock`, which records the
+ * owning pid. A process killed hard (or an Electron shell torn down) leaves that file
+ * behind, and the next provider start then waits on a worker that will never appear. The
+ * seller shows no symptom at all: it announces, quotes, and passes every economic check,
+ * and the buyer discovers the problem only after paying — which is exactly what happened.
  *
- * Starting the provider is what loads the model. The firewall is opened to nobody here, so
- * this authorizes no one: it answers "can this machine serve?" and nothing else. The
- * provider is then stopped, leaving the grant path exactly as it was — the first paying
- * buyer still starts it under a firewall naming only them.
+ * A lock naming a pid that is gone is garbage, and removing it is safe. A lock naming a
+ * LIVE process is not ours to touch: another Conduit is running on this machine, and
+ * saying so is more useful than silently fighting it for the worker.
+ *
+ * Deliberately NOT verifying the model itself here. Doing that means starting the provider,
+ * and this SDK does not survive a stop/start cycle in one process — the second start never
+ * returns — so a "health check" written that way would leave the seller permanently unable
+ * to serve. `npm run seller-check` does that check in a throwaway process instead.
  */
-async function preflightModel(): Promise<void> {
-  console.log(`[seller] checking ${offer.model} loads on this machine…`);
-  const started = Date.now();
-  const res = await sdk.startQVACProvider({ firewall: { mode: 'allow', publicKeys: [] } });
-  await sdk.stopQVACProvider();
-  console.log(`[seller] ${offer.model} loads OK (${((Date.now() - started) / 1000).toFixed(1)}s) — provider ${String(res.publicKey).slice(0, 16)}…`);
+function clearStaleWorkerLock(): void {
+  const lockPath = path.join(os.homedir(), '.qvac', '.worker.lock');
+  let raw: string;
+  try { raw = readFileSync(lockPath, 'utf8'); }
+  catch { return; } // no lock — nothing to do
+
+  let pid: number | undefined;
+  try { pid = JSON.parse(raw)?.pid; } catch { /* unparseable → treat as stale */ }
+
+  if (typeof pid === 'number') {
+    try {
+      process.kill(pid, 0); // throws iff the process is gone
+      console.log(`[seller] note: QVAC worker lock is held by a live process (pid ${pid}).`);
+      console.log('[seller] another Conduit is probably running here; they will share the worker.');
+      return;
+    } catch { /* not running → the lock is stale */ }
+  }
+  try {
+    unlinkSync(lockPath);
+    console.log(`[seller] cleared a stale QVAC worker lock (pid ${pid ?? 'unknown'} is gone)`);
+  } catch { /* raced with someone else clearing it — fine */ }
 }
 
-try {
-  await preflightModel();
-} catch (e: any) {
-  // Refuse to advertise. A seller in the marketplace that cannot serve costs buyers real
-  // money — they pay to open a channel and get nothing back — so being absent is strictly
-  // better than being present and broken.
-  console.error(`\n[seller] cannot start ${offer.model}: ${e?.message ?? e}`);
-  console.error('[seller] NOT going online — a seller that cannot serve would take buyers\' deposits and return nothing.');
-  console.error('[seller] fix the model load (see the error above), then start the seller again.\n');
-  process.exit(1);
-}
+clearStaleWorkerLock();
 
 await swarm.join(TOPIC, { server: true, client: false }).flushed();
 console.log(`[seller] online. offer: ${offer.model} @ ${offer.priceBaseUnits} base-units, ~${offer.tps} tps. wallet ${seller.address}`);
