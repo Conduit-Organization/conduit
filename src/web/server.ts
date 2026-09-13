@@ -357,8 +357,14 @@ async function refreshHumanSelf(): Promise<void> {
   const justRegistered =
     reg.phase === 'done' &&
     reg.address?.toLowerCase() === buyer.address.toLowerCase() &&
-    humanSelf?.verified === false;
-  if (justRegistered) humanSelf = null;
+    humanSelf?.verified !== true;
+  if (justRegistered) {
+    humanSelf = null;
+    // Clearing our own summary is not enough — the lookup underneath it has its own cache,
+    // and it is holding the "not registered" answer from before the scan. Both have to go
+    // or the next read returns the stale verdict this is trying to escape.
+    humanity.forget(buyer.address);
+  }
   if (humanSelf && Date.now() - humanSelf.at < HUMAN_SELF_TTL) return;
   try {
     const id = await humanity.humanId(buyer.address);

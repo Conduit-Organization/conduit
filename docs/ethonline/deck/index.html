@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Conduit — ETHOnline 2026</title>
+<title>Conduit - ETHOnline 2026</title>
 <!--
   Five slides for the demo video, wearing the product's own skin.
 
   Not a framework and not a hosted page: one local file, opened fullscreen in a browser and
   screen-recorded, so the slides cut against the app footage without a visual seam. Every
-  colour, font and label style is lifted from app/src/styles.css — if the product's look
+  colour, font and label style is lifted from app/src/styles.css - if the product's look
   changes, this should be updated from there rather than drifting on its own.
 
   Keys:  → / space / click = next    ← = back    f = fullscreen    h = hide the counter
@@ -102,10 +102,10 @@
     <div class="eyebrow"><span class="dot"></span> How it works</div>
     <h1>The payment <em>is</em><br />the handshake.</h1>
     <ul>
-      <li><span class="bullet"></span><div>Buyer and seller find each other over a <b>DHT</b> — there is no server</div></li>
+      <li><span class="bullet"></span><div>Buyer and seller find each other over a <b>DHT</b> - there is no server</div></li>
       <li><span class="bullet"></span><div>A settled payment releases the seller's <b>firewalled GPU</b>. Nothing else does</div></li>
       <li><span class="bullet"></span><div>The model runs <b>on the seller's machine</b>; weights never move</div></li>
-      <li><span class="bullet"></span><div>End to end encrypted, peer to peer — <b>0 bytes</b> to any cloud</div></li>
+      <li><span class="bullet"></span><div>End to end encrypted, peer to peer - <b>0 bytes</b> to any cloud</div></li>
     </ul>
     <div class="foot"><span class="chip">CONDUIT · ETHONLINE 2026</span></div>
   </section>
@@ -116,8 +116,8 @@
     <h1>Many answers,<br /><em>one</em> settlement.</h1>
     <ul>
       <li><span class="bullet"></span><div>A payment channel opens <b>once</b> on-chain, then every answer is an off-chain <b>EIP-712 voucher</b></div></li>
-      <li><span class="bullet"></span><div>The seller redeems them in a single <code>claim</code> — gas paid once, not per answer</div></li>
-      <li><span class="bullet"></span><div>On Arc, <b>USDC is the gas token too</b> — a seller earns and spends one asset</div></li>
+      <li><span class="bullet"></span><div>The seller redeems them in a single <code>claim</code> - gas paid once, not per answer</div></li>
+      <li><span class="bullet"></span><div>On Arc, <b>USDC is the gas token too</b> - a seller earns and spends one asset</div></li>
       <li><span class="bullet"></span><div>In this demo: <span class="money">2 answers → 1 transaction</span>, fee <span class="money">0.0015 USDC</span></div></li>
     </ul>
     <div class="foot"><span class="chip mint">chain 5042002</span><span class="chip">ConduitEscrow · 0xdC48E5e5…632C2</span></div>
@@ -129,9 +129,9 @@
     <h1>One actor can't be<br /><em>a thousand customers</em>.</h1>
     <ul>
       <li><span class="bullet"></span><div>A seller can require that a buyer is a <b>verified unique human</b></div></li>
-      <li><span class="bullet"></span><div>The wallet resolves to an <b>anonymous human ID</b> — not a name, not a face</div></li>
+      <li><span class="bullet"></span><div>The wallet resolves to an <b>anonymous human ID</b> - not a name, not a face</div></li>
       <li><span class="bullet"></span><div>Many wallets, <b>one person</b>: reach is counted in people, not addresses</div></li>
-      <li><span class="bullet"></span><div>Payment alone is not enough — a funded channel from an unverified wallet is <b>refused</b></div></li>
+      <li><span class="bullet"></span><div>Payment alone is not enough - a funded channel from an unverified wallet is <b>refused</b></div></li>
     </ul>
     <div class="foot"><span class="chip mint">AgentBook · World Chain</span><span class="chip">0xA23aB271…944dA</span></div>
   </section>
@@ -143,7 +143,7 @@
     <ul>
       <li><span class="bullet"></span><div>Every channel the escrow ever opened is <b>indexed from on-chain events</b></div></li>
       <li><span class="bullet"></span><div>A first-time buyer can read a stranger's record <b>before paying anything</b></div></li>
-      <li><span class="bullet"></span><div>Forged signals are classified and <b>excluded</b> — visible, but not counted</div></li>
+      <li><span class="bullet"></span><div>Forged signals are classified and <b>excluded</b> - visible, but not counted</div></li>
       <li><span class="bullet"></span><div>It runs both ways: a buyer who <b>abandons channels</b> gets refused too</div></li>
     </ul>
     <div class="foot"><span class="chip mint">subgraph · arc-testnet</span><span class="chip">counts unique humans</span></div>
@@ -164,7 +164,7 @@
     hud.textContent = `${i + 1} / ${slides.length}`;
   }
   // Scale the fixed 1600x900 canvas to the window so the deck is pixel-identical on any
-  // display — what gets recorded does not depend on the machine it is shown on.
+  // display - what gets recorded does not depend on the machine it is shown on.
   function fit() {
     const s = Math.min(innerWidth / 1600, innerHeight / 900);
     deck.style.transform = `scale(${s})`;
@@ -179,7 +179,7 @@
   });
   addEventListener('click', () => show(i + 1));
 
-  // #3 jumps straight to slide 3 — handy for re-recording one slide without clicking
+  // #3 jumps straight to slide 3 - handy for re-recording one slide without clicking
   // through the others, and for checking a single slide's layout.
   const fromHash = () => show((parseInt(location.hash.slice(1), 10) || 1) - 1);
   addEventListener('hashchange', fromHash);

@@ -73,6 +73,14 @@ export interface Humanity {
   verify(proof: HumanProof | undefined, buyerWallet: string, sellerWallet: string): Promise<VerifyResult>;
   /** Anonymous human id for a wallet, or null. Used by the reputation layer. */
   humanId(wallet: string): Promise<string | null>;
+  /**
+   * Drop any cached answer for this wallet.
+   *
+   * Called when we KNOW the answer just changed — a registration we drove to completion
+   * ourselves. Waiting out a timer would work eventually; this makes the next lookup read
+   * the chain, so the header flips as soon as the scan succeeds instead of seconds later.
+   */
+  forget(wallet: string): void;
   /** Buyer side: produce a proof for this seller. `sign` is an EIP-191 personal_sign. */
   prove(
     buyerWallet: string,
@@ -88,8 +96,18 @@ export interface HumanityOpts {
   /** Override the AgentBook address (testing / a custom deployment). */
   agentBookAddress?: `0x${string}`;
   maxAgeMs?: number;
-  /** Cache AgentBook results for this long. Registration does not flip back and forth. */
+  /**
+   * How long to trust a FOUND registration. A wallet that resolves to a human keeps
+   * resolving to that human, so this can be generous.
+   *
+   * A "not registered" answer is deliberately NOT held for this long — see below.
+   */
   cacheTtlMs?: number;
+  /**
+   * How long to trust a "not registered" answer. Seconds, not minutes: this is the one
+   * result that changes, and it changes the instant someone verifies.
+   */
+  negativeCacheTtlMs?: number;
   log?: (m: string) => void;
 }
 
@@ -103,6 +121,14 @@ export function createHumanity(opts: HumanityOpts = {}): Humanity {
   const log = opts.log ?? (() => {});
   const maxAge = opts.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const cacheTtl = opts.cacheTtlMs ?? 10 * 60 * 1000;
+  // Registration is one-way: a wallet goes unregistered → registered and never back. So a
+  // FOUND id is safe to hold, and "not registered" is precisely the answer that goes stale.
+  // Caching both for ten minutes meant a buyer who verified mid-session kept being refused
+  // by a seller reading its own cache — and the only cure was restarting both apps.
+  //
+  // This short window exists only so a single purchase (which looks the buyer up twice:
+  // once on the probe, once on the grant) does not make two round trips to World Chain.
+  const negativeCacheTtl = opts.negativeCacheTtlMs ?? 5_000;
 
   const verifier = createAgentBookVerifier({
     rpcUrl: opts.worldChainRpcUrl,
@@ -129,7 +155,10 @@ export function createHumanity(opts: HumanityOpts = {}): Humanity {
 
     const key = wallet.toLowerCase();
     const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < cacheTtl) return hit.id;
+    if (hit) {
+      const ttl = hit.id ? cacheTtl : negativeCacheTtl;
+      if (Date.now() - hit.at < ttl) return hit.id;
+    }
 
     const id = await verifier.lookupHuman(wallet);
     cache.set(key, { id, at: Date.now() });
@@ -138,6 +167,10 @@ export function createHumanity(opts: HumanityOpts = {}): Humanity {
 
   return {
     humanId,
+
+    forget(wallet: string): void {
+      cache.delete(wallet.toLowerCase());
+    },
 
     async verify(proof, buyerWallet, sellerWallet): Promise<VerifyResult> {
       if (!proof) return { ok: false, reason: 'no human proof supplied' };
