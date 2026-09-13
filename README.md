@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="./docs/assets/conduit-banner.svg" alt="Conduit — serverless P2P inference market" width="560">
+  <img src="./docs/assets/conduit-banner.svg" alt="Conduit - serverless P2P inference market" width="560">
 </p>
 
 <p align="center">
-  <b>A serverless, peer-to-peer marketplace for AI inference — where a settled USD₮ payment is the access handshake.</b>
+  <b>A serverless, peer-to-peer marketplace for AI inference - where a settled USDC payment is the access handshake.</b>
 </p>
 
 <p align="center">
@@ -17,18 +17,28 @@
 ---
 
 A peer with a GPU sells LLM inference over an end-to-end-encrypted Holepunch link; a buyer's agent pays
-per inference in USD₮, wallet-to-wallet, with **no platform in the middle**. No payment → no handshake →
+per inference in USDC, wallet-to-wallet, with **no platform in the middle**. No payment → no handshake →
 the model is never reached. Model weights never move; only prompt-bytes-in / token-bytes-out cross the
 wire; **the cloud sees nothing**. Every model runs fully on-device through the **QVAC runtime**.
 
-> **Testnet only.** Payments use test USD₮ on Ethereum Sepolia — no real money moves. This is a
-> demonstration of the access-control + settlement primitive, not a live financial service.
+> **Testnet only.** Payments use test USDC on **Arc Testnet** (chain `5042002`) - no real money moves.
+> This is a demonstration of the access-control + settlement primitive, not a live financial service.
 
-**Live:** [conduitt.xyz](https://www.conduitt.xyz) · **Pitch:** [conduitt.xyz/pitch](https://www.conduitt.xyz/pitch)
+**Live:** [conduitt.xyz](https://www.conduitt.xyz) · **Pitch:** [conduitt.xyz/pitch](https://www.conduitt.xyz/pitch) ·
+**Download:** [Linux, macOS, Windows](https://github.com/Conduit-Organization/conduit/releases/latest)
+
+### The three things this rests on
+
+| | | verify it yourself |
+|---|---|---|
+| **Arc** · settlement | Answers are paid for in USDC through a payment channel: one deposit on-chain, then an off-chain signed voucher per answer, redeemed together. USDC is the gas token too, so a seller earns and spends one asset. | [`ConduitEscrow` on arcscan](https://testnet.arcscan.app/address/0xdC48E5e5c3Cf91b6db9ec0f329a14188174632C2) |
+| **The Graph** · reputation | Every channel the escrow has ever opened is indexed, so a first-time buyer can see how a seller treated *everyone*. Forged signals are classified and excluded rather than hidden. | `npm run graph-check` |
+| **World** · personhood | A seller can require a verified unique human. The wallet resolves to an anonymous human id, never an identity, so one actor cannot be a thousand customers. | [`AgentBook` on worldscan](https://worldscan.org/address/0xA23aB2712eA7BBa896930544C7d6636a96b944dA) |
 
 ## Contents
 
-- [ETHOnline 2026 — what is new](#ethonline-2026--what-is-new)
+- [ETHOnline 2026: what is new](#ethonline-2026-what-is-new)
+- [Verify every claim yourself](#verify-every-claim-yourself)
 - [How it works](#how-it-works)
 - [Demo hardware](#demo-hardware)
 - [Prerequisites](#prerequisites)
@@ -40,14 +50,14 @@ wire; **the cloud sees nothing**. Every model runs fully on-device through the *
 - [All commands](#all-commands)
 - [Models](#models)
 - [Audit log](#audit-log)
-- [Remote APIs — the no-cloud guarantee](#remote-apis--the-no-cloud-guarantee)
+- [Remote APIs: the no-cloud guarantee](#remote-apis-the-no-cloud-guarantee)
 - [Reproducing the demo](#reproducing-the-demo)
 - [Repository layout](#repository-layout)
 - [License](#license)
 
 ---
 
-## ETHOnline 2026 — what is new
+## ETHOnline 2026: what is new
 
 > **Judging this project?** Everything below the next heading predates this event and is
 > **not** submitted as hackathon work. The boundary is one command:
@@ -59,17 +69,17 @@ wire; **the cloud sees nothing**. Every model runs fully on-device through the *
 > Full disclosure in [`CONTINUITY.md`](./CONTINUITY.md).
 
 Conduit already sold GPU inference between peers with no server in the middle. What it
-could not do was tell you **who was on the other end** — of either side.
+could not do was tell you **who was on the other end** - of either side.
 
 **A seller's admission test was six checks, and all six were about money.** Is there a
 channel, is the deposit big enough, has it expired, does the epoch match
 (`src/node/sell.ts:146-159`). Nothing asked who the buyer was. A buyer is an address, and
-addresses are free — so one actor can be a thousand customers, and a seller cannot
+addresses are free - so one actor can be a thousand customers, and a seller cannot
 rate-limit, price-discriminate or ban anyone, because the banned party returns as a fresh
 address in one line of code.
 
-**And a buyer could not see a seller at all.** Reputation was first-party only — a JSON
-file on one laptop — so every seller you had not personally met scored a flat `0.5`
+**And a buyer could not see a seller at all.** Reputation was first-party only - a JSON
+file on one laptop - so every seller you had not personally met scored a flat `0.5`
 (`src/core/reputation.ts:6,54,60`, a TODO we wrote ourselves in June).
 
 The new work closes both, in one mechanism:
@@ -82,7 +92,7 @@ The new work closes both, in one mechanism:
 
 ### The vulnerability we found in our own design
 
-The obvious way to score a seller is `settled / (settled + withdrawn)` — a buyer who had
+The obvious way to score a seller is `settled / (settled + withdrawn)` - a buyer who had
 to claw their deposit back is a seller who vanished. **That reading is wrong twice over,
 and we can prove both.**
 
@@ -95,16 +105,16 @@ seller. Proof: [`contracts/test/sybil-grief.test.ts`](./contracts/test/sybil-gri
 
 **2. Every real `Withdrawn` in our history is a renewal, not an abandonment.** Both events
 `ConduitEscrow` has ever emitted on Sepolia are followed **24 seconds later** by the same
-buyer reopening with the same seller at the next epoch — `src/buy/storefront.ts:244-253`
+buyer reopening with the same seller at the next epoch - `src/buy/storefront.ts:244-253`
 reclaiming an expired channel. A naive counter scores that seller **0.0**, the worst value
 on the scale, for retaining a loyal customer. Check it yourself:
 [block 11102985](https://sepolia.etherscan.io/block/11102985) → [11102987](https://sepolia.etherscan.io/block/11102987).
 
-`ConduitEscrow` is **not** at fault — funds are never at risk, and `withdraw()` does
+`ConduitEscrow` is **not** at fault - funds are never at risk, and `withdraw()` does
 exactly what its docstring promises. The defect is in *deriving reputation from the
 event*, which is the new work. So the naive counter is never shipped, not even briefly.
 
-### The qualification rules — published so you can audit them
+### The qualification rules - published so you can audit them
 
 A `Withdrawn` counts against a seller only if **all five** hold
 ([`src/core/qualification.ts`](./src/core/qualification.ts)):
@@ -112,19 +122,19 @@ A `Withdrawn` counts against a seller only if **all five** hold
 | Rule | Threshold | Why |
 |---|---|---|
 | Channel duration | ≥ **600s** | A 1-second channel cannot evidence a failure to deliver |
-| Deposit | ≥ **20,000** base units (0.02 USD₮) | 10× the cheapest advertised tier — a session, not a probe |
+| Deposit | ≥ **20,000** base units (0.02 USDC) | 10× the cheapest advertised tier - a session, not a probe |
 | Buyer settlements | ≥ **1** with any seller | A wallet that never paid for anything is not a wronged customer |
-| Not a renewal | reopen gap > **300s** | The buyer came straight back — that is satisfaction, not a complaint |
+| Not a renewal | reopen gap > **300s** | The buyer came straight back - that is satisfaction, not a complaint |
 | Buyer is World-verified | AgentBook `lookupHuman ≠ 0` | The identity has to have cost something |
 
-Failing any of these does **not** hide the event — it is still indexed and queryable as
+Failing any of these does **not** hide the event - it is still indexed and queryable as
 `probeChannels` or `renewals`, with its `disqualificationReasons`. The filtering is
 auditable, not implicit.
 
 ```
 reliability = settled / (settled + qualifiedWithdrawn)       // 0.5 when n = 0
 breadth     = min(1, uniqueVerifiedHumans / 5)               // humans, not addresses
-volume      = min(1, totalClaimed / 1_000_000)               // 1.0 USD₮ (6 dec)
+volume      = min(1, totalClaimed / 1_000_000)               // 1.0 USDC (6 dec)
 globalScore = 0.65*reliability + 0.20*breadth + 0.15*volume
 ```
 
@@ -135,22 +145,22 @@ global signal only fills the cold-start hole.
 ### Why the human gate is load-bearing, not a login
 
 `AgentBook.lookupHuman(address)` returns a **stable anonymous human identifier**, not a
-boolean. So N wallets backed by the same person collapse to **one** — which is precisely
+boolean. So N wallets backed by the same person collapse to **one** - which is precisely
 what makes `breadth` uncheatable and the sybil attack above unaffordable. It is a plain
 `view` call, so the check sits *inside* the P2P session grant as a peer of the economic
 checks rather than wrapping them.
 
 Payment and personhood stay **independent**: a verified human with no funded channel is
 still refused `no open channel`; a funded channel with no proof is refused
-`unverified human`. And `requireHuman` is **seller policy** — some sellers sell to any
+`unverified human`. And `requireHuman` is **seller policy** - some sellers sell to any
 funded keypair, some only to humans. That is a market, not a rule.
 
 ### Cost to forge a seller's reputation
 
 |  | Cost |
 |---|---|
-| Without the human gate | N × gas — **cents**, deposit refunded in full |
-| With the human gate | N × World-verified humans — **not purchasable at any gas price** |
+| Without the human gate | N × gas - **cents**, deposit refunded in full |
+| With the human gate | N × World-verified humans - **not purchasable at any gas price** |
 
 The first number is measured from real transactions we ran, not estimated. The second is a
 property of World ID, not a claim of ours.
@@ -170,40 +180,61 @@ property of World ID, not a claim of ours.
 identical source to a second network is a stronger claim than editing it, and it keeps
 every existing voucher, channel and indexed event valid.
 
+See [Verify every claim yourself](#verify-every-claim-yourself) below for the commands that
+check each of these against a live chain.
+
+---
+
+## Verify every claim yourself
+
+Nothing here asks to be taken on trust. Each command reads a live chain or a live endpoint
+and prints what it found; none of them touches a mock.
+
 ```bash
-npm test              # 52 engine tests
-npm run test:contracts # 16 contract tests, incl. the sybil PoC
-npm run humanity-check # live AgentBook reads on World Chain — no key needed
-npm run check:arc      # live Arc testnet connectivity + settlement token
+npm run doctor            # can THIS machine take part at all? worker lock, runtime, benchmark
+npm run graph-check       # the subgraph, live: 18 channels indexed, 6 forged signals excluded
+npm run humanity-check    # the World gate against AgentBook on World Chain: 18 checks
+npm run arc-e2e           # the whole payment rail on Arc in USDC (needs a funded key)
+npm run attack-demo       # buys a seller's reputation with forged signals, then prices the same attack in people
+npm test                  # 79 unit tests, no network
 ```
+
+`graph-check` is the one to run first if you only run one. It shows six withdrawals at a
+millionth of a cent, held for one second each, indexed and visible but refused as evidence,
+and a buyer who would be turned away on abandonment history. All of it derived from events
+our own contract emitted on Arc.
+
+Addresses, chain ids and RPC URLs were verified against primary sources and direct chain
+reads rather than recalled; the record of how each was checked is in
+[`docs/ethonline/VERIFIED-CONSTANTS.md`](./docs/ethonline/VERIFIED-CONSTANTS.md).
 
 ---
 
 ## How it works
 
-One app is both **buyer** and **seller** — the role is a runtime choice, not a separate product. A node
+One app is both **buyer** and **seller** - the role is a runtime choice, not a separate product. A node
 learns what it can sell by benchmarking its own hardware (the **capability prober**, `npm run bench`).
 
 The buyer→answer path has four hops:
 
-1. **Discover** — peers meet on a Hyperswarm/Holepunch DHT (topic `conduit:market:v1`) with NAT
+1. **Discover** - peers meet on a Hyperswarm/Holepunch DHT (topic `conduit:market:v1`) with NAT
    hole-punching. There is no server in the middle. The seller advertises an offer (model + price + tps).
-2. **Choose** — the buyer scores the sellers it can see and picks one: global reputation from The Graph
+2. **Choose** - the buyer scores the sellers it can see and picks one: global reputation from The Graph
    first, then price, then speed. A seller settling on a different chain is shown but never routed to,
    because a channel opened on one chain is invisible on the other.
-3. **Pay** — **every answer is bought from a peer.** The first purchase from a seller opens an **escrow
+3. **Pay** - **every answer is bought from a peer.** The first purchase from a seller opens an **escrow
    payment channel** (one on-chain deposit), and each answer after that settles **off-chain** with a
-   signed **EIP-712 voucher** — answers come back in ~2s with no on-chain wait, and the channel tops
+   signed **EIP-712 voucher** - answers come back in ~2s with no on-chain wait, and the channel tops
    itself up when it runs low. A **SpendPolicy** (per-call cap + session budget) authorizes the spend;
    if it declines, the purchase is refused and says why.
 
    > Setting `CONDUIT_ALWAYS_PAY=0` restores the original behaviour: an on-device **confidence router**
    > samples a small local model *k* times and measures self-consistency (QVAC exposes no logprobs, so
    > answer stability stands in), answers easy prompts free on-device, and escalates only the hard ones.
-   > It is off by default because it made the market — the thing this product *is* — invisible half the
+   > It is off by default because it made the market - the thing this product *is* - invisible half the
    > time.
-4. **Run** — the payment releases the seller's **firewall-gated QVAC provider** pubkey; the buyer
-   delegates inference to it over the E2E link. The model executes **on the seller's device** — the
+4. **Run** - the payment releases the seller's **firewall-gated QVAC provider** pubkey; the buyer
+   delegates inference to it over the E2E link. The model executes **on the seller's device** - the
    buyer never sees the weights, the seller never sees the buyer's keys, and no prompt touches a cloud.
 
 A **freeloader** (no payment) is refused at the Noise handshake having transferred **0 bytes**. First-party
@@ -222,8 +253,8 @@ codebase; buyer/seller is a runtime flag.
 
 | Role | Machine | CPU | GPU | RAM | Storage | OS |
 |------|---------|-----|-----|-----|---------|-----|
-| **Buyer** (router + agent + wallet) | Linux laptop | AMD Ryzen 7 7435HS — 8 cores / 16 threads | NVIDIA GeForce RTX 4050 Laptop — 6 GB VRAM, Vulkan, driver 580.82 | 24 GB DDR5 | NVMe SSD (~10 GB free for the model cache) | Pop!_OS 24.04 LTS, kernel 6.16 |
-| **Seller** (GPU provider) | MacBook Air (M5) | Apple M5 — Apple Silicon | Apple integrated GPU (Metal) | 16 GB unified memory | SSD (~10 GB free) | macOS 15+ |
+| **Buyer** (router + agent + wallet) | Linux laptop | AMD Ryzen 7 7435HS - 8 cores / 16 threads | NVIDIA GeForce RTX 4050 Laptop - 6 GB VRAM, Vulkan, driver 580.82 | 24 GB DDR5 | NVMe SSD (~10 GB free for the model cache) | Pop!_OS 24.04 LTS, kernel 6.16 |
+| **Seller** (GPU provider) | MacBook Air (M5) | Apple M5 - Apple Silicon | Apple integrated GPU (Metal) | 16 GB unified memory | SSD (~10 GB free) | macOS 15+ |
 
 > Either machine can fill either role; this table reflects the recorded demo. Models execute on the GPU
 > (the audit log records `"backend":"gpu"`). VRAM/unified-memory needed: ~0.5 GB for the 0.6B router model,
@@ -250,45 +281,45 @@ cd conduit
 npm install                     # also compiles native modules for your platform
 
 # 2. Configure the environment
-cp .env.example .env            # then edit .env — see the table below
+cp .env.example .env            # then edit .env - see the table below
 
-# 3. Fund the wallet (account 0 = buyer) with Arc testnet USDC — one asset covers
+# 3. Fund the wallet (account 0 = buyer) with Arc testnet USDC - one asset covers
 #    both gas and payments on Arc. Faucet: https://faucet.circle.com
 
 # 4. Benchmark this machine → bench-profile.json (picks the best sellable model)
 npm run bench
 
-# 5. Run something — e.g. the headline demo, or the desktop app
+# 5. Run something - e.g. the headline demo, or the desktop app
 npm run demo
 ```
 
 The desktop app can also be **downloaded prebuilt** (no toolchain needed) from
-[GitHub Releases](https://github.com/Conduit-Organization/conduit/releases) — see [Running it](#running-it).
+[GitHub Releases](https://github.com/Conduit-Organization/conduit/releases) - see [Running it](#running-it).
 
 ---
 
 ## Environment variables
 
-Copy `.env.example` → `.env` and fill in. Both roles read this file. **Testnet keys only — never commit a secret.**
+Copy `.env.example` → `.env` and fill in. Both roles read this file. **Testnet keys only - never commit a secret.**
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `CONDUIT_WALLET_MNEMONIC` | — | keystore | BIP-39 seed phrase (testnet). Account 0 = buyer, account 1 = seller earnings. The desktop app uses its own encrypted keystore instead. |
-| `CONDUIT_NETWORK` | — | `arc-testnet` | Which network profile to settle on: `arc-testnet` or `sepolia`. Selects the RPC, token, escrow and subgraph **as a matching set** — so these cannot drift apart. |
-| `CONDUIT_RPC_URL` | — | the profile's | EVM **testnet RPC** — the only remote service, non-AI, settlement only. |
-| `CONDUIT_CHAIN_ID` | — | the profile's | Override the chain id. Rarely needed; the profile supplies it. |
-| `CONDUIT_USDT_ADDRESS` | — | the profile's | Settlement token contract. |
-| `CONDUIT_ESCROW` | — | `1` | Escrow payment channels. **On by default** — this is how paid answers work. |
-| `CONDUIT_ESCROW_ADDRESS` | — | the profile's | Override the deployed `ConduitEscrow`. |
-| `CONDUIT_ALWAYS_PAY` | — | `1` | Every answer is bought from a peer. `0` restores the original confidence router, where an on-device model answers easy prompts free. |
-| `CONDUIT_HUMAN_PROOF` | — | `1` | Buyer: attach a World human proof when opening a session. Harmless if the seller ignores it. |
-| `CONDUIT_REQUIRE_HUMAN` | — | `0` | Seller: refuse buyers who are not backed by a verified unique human. |
-| `CONDUIT_SUBGRAPH_URL` | — | the profile's | The Graph endpoint for global reputation. Empty disables the global layer. |
-| `CONDUIT_SEED` | — | random | 64-hex seed for a deterministic Hyperswarm identity. |
-| `CONDUIT_SELLER_MNEMONIC` | — | — | Run the seller from a different wallet than the buyer. |
-| `CONDUIT_SELLER_MODEL` | — | prober's pick | Force the seller to serve a specific model. |
-| `CONDUIT_VERIFY` | — | `0` | `1` adds a self-critique pass on confident local answers. |
-| `PORT` | — | `8788` | Web/engine API port. |
+| `CONDUIT_WALLET_MNEMONIC` | - | keystore | BIP-39 seed phrase (testnet). Account 0 = buyer, account 1 = seller earnings. The desktop app uses its own encrypted keystore instead. |
+| `CONDUIT_NETWORK` | - | `arc-testnet` | Which network profile to settle on: `arc-testnet` or `sepolia`. Selects the RPC, token, escrow and subgraph **as a matching set** - so these cannot drift apart. |
+| `CONDUIT_RPC_URL` | - | the profile's | EVM **testnet RPC** - the only remote service, non-AI, settlement only. |
+| `CONDUIT_CHAIN_ID` | - | the profile's | Override the chain id. Rarely needed; the profile supplies it. |
+| `CONDUIT_USDT_ADDRESS` | - | the profile's | Settlement token contract. |
+| `CONDUIT_ESCROW` | - | `1` | Escrow payment channels. **On by default** - this is how paid answers work. |
+| `CONDUIT_ESCROW_ADDRESS` | - | the profile's | Override the deployed `ConduitEscrow`. |
+| `CONDUIT_ALWAYS_PAY` | - | `1` | Every answer is bought from a peer. `0` restores the original confidence router, where an on-device model answers easy prompts free. |
+| `CONDUIT_HUMAN_PROOF` | - | `1` | Buyer: attach a World human proof when opening a session. Harmless if the seller ignores it. |
+| `CONDUIT_REQUIRE_HUMAN` | - | `0` | Seller: refuse buyers who are not backed by a verified unique human. |
+| `CONDUIT_SUBGRAPH_URL` | - | the profile's | The Graph endpoint for global reputation. Empty disables the global layer. |
+| `CONDUIT_SEED` | - | random | 64-hex seed for a deterministic Hyperswarm identity. |
+| `CONDUIT_SELLER_MNEMONIC` | - | - | Run the seller from a different wallet than the buyer. |
+| `CONDUIT_SELLER_MODEL` | - | prober's pick | Force the seller to serve a specific model. |
+| `CONDUIT_VERIFY` | - | `0` | `1` adds a self-critique pass on confident local answers. |
+| `PORT` | - | `8788` | Web/engine API port. |
 
 > The packaged desktop app needs no `.env` at all: it creates an encrypted keystore on first run and
 > takes its network, token, escrow and subgraph from the selected network profile.
@@ -298,7 +329,7 @@ Copy `.env.example` → `.env` and fill in. Both roles read this file. **Testnet
 ## Contract addresses
 
 Two networks are supported. `CONDUIT_NETWORK` selects one, and each profile pairs its escrow with the
-chain that escrow is deployed on — an address and a chain id can never be configured into disagreeing.
+chain that escrow is deployed on - an address and a chain id can never be configured into disagreeing.
 
 **Arc Testnet** (default) · chain id **`5042002`** · USDC is both the gas token and the settlement token.
 
@@ -314,7 +345,7 @@ chain that escrow is deployed on — an address and a chain id can never be conf
 | **ConduitEscrow** (payment channels) | `0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7` | [etherscan](https://sepolia.etherscan.io/address/0x741BbE3B2d19E1aE965467280Cc2a442F3632Ee7) |
 | **Test USD₮** (ERC-20, 6 decimals) | `0xd077A400968890Eacc75cdc901F0356c943e4fDb` | [etherscan](https://sepolia.etherscan.io/address/0xd077A400968890Eacc75cdc901F0356c943e4fDb) |
 
-**World Chain** — [`AgentBook`](https://worldscan.org/address/0xA23aB2712eA7BBa896930544C7d6636a96b944dA)
+**World Chain** - [`AgentBook`](https://worldscan.org/address/0xA23aB2712eA7BBa896930544C7d6636a96b944dA)
 `0xA23aB2712eA7BBa896930544C7d6636a96b944dA` is read (never written by this app) to resolve a wallet to
 an anonymous human id.
 
@@ -329,17 +360,17 @@ The escrow contract source is in [`contracts/contracts/ConduitEscrow.sol`](./con
 **On Arc (the default), there is one asset to get.** USDC is the gas token *and* the settlement token, so a
 single balance covers opening a channel and paying for answers:
 
-- [faucet.circle.com](https://faucet.circle.com) — Arc testnet USDC.
+- [faucet.circle.com](https://faucet.circle.com) - Arc testnet USDC.
 
 **On Sepolia**, gas and settlement are different assets and the wallet needs both:
 
-1. **Sepolia ETH** (gas to open/settle the channel) — e.g. [sepoliafaucet.com](https://sepoliafaucet.com),
+1. **Sepolia ETH** (gas to open/settle the channel) - e.g. [sepoliafaucet.com](https://sepoliafaucet.com),
    the [Alchemy](https://www.alchemy.com/faucets/ethereum-sepolia) or [Infura](https://www.infura.io/faucet/sepolia)
    faucets.
-2. **Test USD₮** (the token above) — from the Pimlico / Candide faucet for the configured token.
+2. **Test USD₮** (the token above) - from the Pimlico / Candide faucet for the configured token.
 
 > An unfunded wallet cannot open a channel, and since every answer is bought from a peer there is no free
-> local tier to fall back to — the purchase is refused and says so. Fund the wallet first.
+> local tier to fall back to - the purchase is refused and says so. Fund the wallet first.
 
 ---
 
@@ -356,13 +387,13 @@ npm run dist        # builds the Electron app → release/
 The build is large (~1.6 GB) because the on-device AI runtime and its model backends are
 bundled. On first launch the app downloads its models into `~/.qvac` (~3 GB).
 
-macOS and Windows builds must be produced **on** those platforms — a DMG needs macOS's
+macOS and Windows builds must be produced **on** those platforms - a DMG needs macOS's
 `hdiutil`, so it cannot be cross-built from Linux.
 
 #### Platform notes
 
 **Read-only media.** npm does not preserve the executable bit inside published packages,
-so `bare-runtime`'s `bin/bare` — the process the inference worker runs in — arrives
+so `bare-runtime`'s `bin/bare` - the process the inference worker runs in - arrives
 non-executable and the library repairs it at startup with a `chmod`. That repair cannot
 work from a read-only medium, which broke launching from a mounted DMG (`EROFS`) and from
 the Linux AppImage (`EACCES`).
@@ -387,13 +418,13 @@ timeout. Install them with:
 brew install openssl@3
 ```
 
-This is an upstream packaging issue in the prebuilt binary, not in Conduit — only 2 of
+This is an upstream packaging issue in the prebuilt binary, not in Conduit - only 2 of
 the 12 QVAC prebuilds are affected, and the `linux-x64` prebuilds link by normal soname,
 which is why Linux is unaffected. Settlement, reputation and the World gate all work
 regardless; it is local *inference* that needs the libraries.
 
 **Unsigned builds.** Releases are not code-signed. macOS Gatekeeper reports "damaged and
-can't be opened" — right-click the app and choose **Open** once. Windows SmartScreen
+can't be opened" - right-click the app and choose **Open** once. Windows SmartScreen
 shows a similar warning.
 
 ### Headline demo (single machine)
@@ -401,8 +432,8 @@ shows a similar warning.
 npm run demo
 ```
 One run: ① a cheap local 0.6B answers an easy prompt **free**; ② the agent detects low confidence,
-**pays 0.01 USD₮**, and gets a SoTA answer from Qwen3-4B over E2E P2P; ③ a **freeloader is refused at
-the handshake (0 bytes)** — with a live USD₮ ledger, a `cloud_bytes=0` counter, and a JSONL audit.
+**pays 0.01 USDC**, and gets a SoTA answer from Qwen3-4B over E2E P2P; ③ a **freeloader is refused at
+the handshake (0 bytes)** - with a live USDC ledger, a `cloud_bytes=0` counter, and a JSONL audit.
 
 ### Two machines (the real P2P demo)
 ```bash
@@ -423,7 +454,7 @@ npm run start               # app:build + serve → http://localhost:8788
 
 ### Audit run (model lifecycle + inference performance)
 ```bash
-npm run audit               # loads models, runs inference, unloads — writes AUDIT_LOG.jsonl
+npm run audit               # loads models, runs inference, unloads - writes AUDIT_LOG.jsonl
 ```
 
 ---
@@ -438,27 +469,27 @@ npm run audit               # loads models, runs inference, unloads — writes A
 | `npm run dist` | build the Electron desktop app → `release/` |
 | `npm run demo` | headline: local-free → pay-to-escalate (4B) → freeloader-refused, with ledger + audit |
 | `npm run audit` | model load/unload + inference performance → `AUDIT_LOG.jsonl` (no testnet needed) |
-| `npm run market` | serverless storefront — independent seller + buyer meet over Hyperswarm and negotiate |
+| `npm run market` | serverless storefront - independent seller + buyer meet over Hyperswarm and negotiate |
 | `npm run sell` / `npm run buy` | run a seller / buyer node on its own (two machines / two terminals) |
 | `npm run agent` | autonomous buyer: confidence router + spend policy (free / pay / budget-decline) |
 | `npm run route` | confidence router on easy vs. hard prompts (self-consistency, no logprobs) |
-| `npm run bench` | capability prober — benchmarks the local GPU, writes `bench-profile.json` |
-| `npm run escrow-demo` | open a channel, draw vouchers, settle — end to end on the selected network |
+| `npm run bench` | capability prober - benchmarks the local GPU, writes `bench-profile.json` |
+| `npm run escrow-demo` | open a channel, draw vouchers, settle - end to end on the selected network |
 | `npm run slice` | Phase-1 thin vertical slice (hand-scripted pay→gate→delegate→reject) |
 | `npm run spike:firewall` / `spike:settle` / `spike:delegate` | the de-risking spikes |
 | `npm run typecheck` | TypeScript check (engine) |
 | `npm test` | engine unit tests (node:test, no network) |
 
 **Verifying the three integrations.** Each of these reads a live chain or endpoint and prints what it
-found — none of them takes anything on trust from this repo:
+found - none of them takes anything on trust from this repo:
 
 | Command | What it proves |
 |---------|----------------|
 | `npm run arc-e2e` | the whole payment rail on Arc in USDC: approve → open → sign vouchers → claim → settle → balances reconcile. Needs `CONDUIT_DEPLOYER_KEY` (a funded key). |
 | `npm run graph-check` | the subgraph is synced and its settlement history satisfies the invariants the reputation layer depends on |
 | `npm run humanity-check` | the World gate, read live from AgentBook on World Chain: an unregistered wallet is refused and a registered one admitted, with signature / freshness / seller-binding / replay refusing both alike |
-| `npm run doctor` | whether THIS machine can take part at all: a stale worker lock, whether the inference runtime starts, and whether the capability profile belongs to this machine. Run it first when anything misbehaves — it touches no peer, no wallet and no funds. |
-| `npm run seller-check` | whether THIS machine can serve at all — starts the QVAC provider behind a firewall that admits nobody, then stops it. Run it before going online if a seller is misbehaving. |
+| `npm run doctor` | whether THIS machine can take part at all: a stale worker lock, whether the inference runtime starts, and whether the capability profile belongs to this machine. Run it first when anything misbehaves - it touches no peer, no wallet and no funds. |
+| `npm run seller-check` | whether THIS machine can serve at all - starts the QVAC provider behind a firewall that admits nobody, then stops it. Run it before going online if a seller is misbehaving. |
 | `npm run attack-demo` | buys a seller's reputation with forged signals, then shows the hardened rules and the human gate pricing the same attack in people rather than gas |
 
 ---
@@ -474,7 +505,7 @@ per machine by the prober. Recorded tiers:
 | Llama 3.2 **1B** (tool-calling, Q4) | small seller tier | ~183 tok/s |
 | Qwen3 **1.7B** (Q4) | seller tier | ~118 tok/s |
 | Qwen3 **4B** (Q4_K_M) | **recommended seller tier** | ~60–65 tok/s |
-| EmbeddingGemma **300M** (Q4) | router self-consistency embedding | — |
+| EmbeddingGemma **300M** (Q4) | router self-consistency embedding | - |
 
 (Throughput from `npm run bench` / `npm run audit` on the demo hardware above.)
 
@@ -482,7 +513,7 @@ per machine by the prober. Recorded tiers:
 
 ## Audit log
 
-Every demo run can emit a structured JSONL audit log — one event object per line. `npm run audit`
+Every demo run can emit a structured JSONL audit log - one event object per line. `npm run audit`
 produces a self-contained, **testnet-free** run capturing the full model lifecycle and per-inference
 performance; the committed [`AUDIT_LOG.sample.jsonl`](./AUDIT_LOG.sample.jsonl) is one such run.
 
@@ -508,11 +539,11 @@ on-chain settlement + handshake story (per-inference payment, freeloader rejecti
 
 ---
 
-## Remote APIs — the no-cloud guarantee
+## Remote APIs: the no-cloud guarantee
 
 - **AI inference / embeddings:** 100% via `@qvac/sdk`, on-device or on a paid peer over E2E Holepunch. **No cloud AI.**
 - **Remote AI calls:** NONE.
-- **Remote non-AI services:** a single blockchain **testnet RPC**, used only to submit/confirm USD₮
+- **Remote non-AI services:** a single blockchain **testnet RPC**, used only to submit/confirm USDC
   settlement (per-inference payments + escrow channel open/top-up/claim/settle). No prompt, model, or
   token data is ever sent to it. RPC access is confined to `src/core/wallet.ts` and `src/core/escrow.ts`.
 - **Prompt bytes sent to any cloud:** 0.
@@ -523,12 +554,12 @@ Full disclosure: [`REMOTE_APIS.md`](./REMOTE_APIS.md).
 
 ## Reproducing the demo
 
-1. Provision two machines per [Demo hardware](#demo-hardware) (or run both roles on one box — note the
+1. Provision two machines per [Demo hardware](#demo-hardware) (or run both roles on one box - note the
    shared `~/.qvac/.worker.lock` warning; harmless).
 2. On each: `git clone` → `npm install` → `cp .env.example .env` and set `CONDUIT_WALLET_MNEMONIC=<testnet
-   seed>`. Nothing else is required — the default network profile (`arc-testnet`) supplies the RPC, the
+   seed>`. Nothing else is required - the default network profile (`arc-testnet`) supplies the RPC, the
    token, the escrow address and the subgraph as a matching set.
-3. Fund the buyer wallet with Arc testnet USDC from [faucet.circle.com](https://faucet.circle.com) — one
+3. Fund the buyer wallet with Arc testnet USDC from [faucet.circle.com](https://faucet.circle.com) - one
    asset covers both gas and payments.
 4. `npm run bench` on both → each writes its `bench-profile.json` (the Mac picks Qwen3-4B as its tier).
 5. Seller machine: `npm run sell`. Buyer machine: `npm run buy` (or the desktop app / `npm run start`).
@@ -547,15 +578,15 @@ Full disclosure: [`REMOTE_APIS.md`](./REMOTE_APIS.md).
 
 ```
 app/         React chat + wallet UI (Vite)
-contracts/   Hardhat workspace — ConduitEscrow.sol, MockUSDT, tests, deploy script
+contracts/   Hardhat workspace - ConduitEscrow.sol, MockUSDT, tests, deploy script
 electron/    desktop shell (spawns the engine as a child process)
-landing/     marketing site + /pitch deck (Next.js) — conduitt.xyz
+landing/     marketing site + /pitch deck (Next.js) - conduitt.xyz
 src/
   core/      identity · env · config · wallet · escrow · audit · ledger · prober · pricing · protocol · reputation · keystore
   sell/      provider              (payment-gated QVAC provider)
   buy/       router · agent · market-agent · policy · storefront · consumer
   node/      sell · buy            (independent storefront nodes)
-  web/       server · seller       (engine API: /api/state + /api/ask — and serves the built app)
+  web/       server · seller       (engine API: /api/state + /api/ask - and serves the built app)
   scripts/   demo · audit-demo · market-demo · agent-demo · route-test · bench · slice · escrow-demo
   spikes/    01-firewall · 02-settlement · 03-prober-delegate
 docs/        architecture, build phases, diagrams, submission copy
@@ -565,4 +596,4 @@ docs/        architecture, build phases, diagrams, submission copy
 
 ## License
 
-[Apache-2.0](./LICENSE). Testnet demonstration only — not a live money-transmission service.
+[Apache-2.0](./LICENSE). Testnet demonstration only - not a live money-transmission service.
