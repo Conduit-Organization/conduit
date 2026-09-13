@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Conduit — ETHOnline 2026</title>
+<!--
+  Five slides for the demo video, wearing the product's own skin.
+
+  Not a framework and not a hosted page: one local file, opened fullscreen in a browser and
+  screen-recorded, so the slides cut against the app footage without a visual seam. Every
+  colour, font and label style is lifted from app/src/styles.css — if the product's look
+  changes, this should be updated from there rather than drifting on its own.
+
+  Keys:  → / space / click = next    ← = back    f = fullscreen    h = hide the counter
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink-0: #0a0e13; --ink-1: #0e1217; --ink-2: #121922; --ink-3: #16202b;
+    --line: #1e2a35; --line-2: #2a3b48;
+    --mint: #2be3a8; --mint-soft: rgba(43,227,168,.14); --mint-line: rgba(43,227,168,.34);
+    --amber: #ffc44d; --amber-soft: rgba(255,196,77,.14);
+    --text: #e7f0ef; --muted: #8a9aa6; --muted-2: #5c6b76;
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-ui: 'Hanken Grotesk', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--font-ui); color: var(--text); overflow: hidden; cursor: none;
+    background:
+      radial-gradient(1100px 560px at 78% -12%, rgba(43,227,168,.07), transparent 60%),
+      radial-gradient(900px 700px at -10% 110%, rgba(43,227,168,.04), transparent 55%),
+      var(--ink-1);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Slides are laid out at 16:9 and scaled to the window, so the recording is identical
+     whatever the display is. */
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  #deck { width: 1600px; height: 900px; transform-origin: center; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0; padding: 92px 110px;
+    display: flex; flex-direction: column;
+    opacity: 0; visibility: hidden; transform: translateY(14px);
+    transition: opacity .45s ease, transform .45s cubic-bezier(.2,.8,.2,1);
+  }
+  .slide.on { opacity: 1; visibility: visible; transform: none; }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: 2.4px;
+    text-transform: uppercase; color: var(--muted-2); display: flex; gap: 14px; align-items: center;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 14px var(--mint); }
+  .eyebrow .role { color: var(--mint); }
+
+  h1 { font-family: var(--font-display); font-weight: 400; font-size: 92px; line-height: 1.02; margin: 26px 0 0; letter-spacing: -.5px; }
+  h1 em { font-style: italic; color: var(--mint); }
+  .sub { font-size: 25px; line-height: 1.5; color: var(--muted); margin: 22px 0 0; max-width: 1100px; }
+
+  ul { list-style: none; margin: 54px 0 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+  li { display: flex; gap: 20px; align-items: flex-start; font-size: 29px; line-height: 1.42; }
+  li .bullet { flex: none; width: 9px; height: 9px; margin-top: 14px; border-radius: 50%; background: var(--mint); opacity: .85; }
+  li b { color: var(--mint); font-weight: 600; }
+  li .money { color: var(--amber); font-family: var(--font-mono); font-size: .93em; }
+  li code { font-family: var(--font-mono); font-size: .86em; color: var(--text); background: var(--ink-3); border: 1px solid var(--line); padding: 2px 8px; border-radius: 6px; }
+
+  .foot { margin-top: auto; display: flex; gap: 16px; align-items: center; font-family: var(--font-mono); font-size: 14px; color: var(--muted-2); letter-spacing: 1.1px; }
+  .foot .chip { border: 1px solid var(--line-2); border-radius: 999px; padding: 7px 15px; }
+  .foot .chip.mint { color: var(--mint); border-color: var(--mint-line); background: var(--mint-soft); }
+
+  /* Title slide */
+  .hero { justify-content: center; }
+  .hero h1 { font-size: 132px; }
+  .mark { display: flex; align-items: center; gap: 20px; }
+  .mark svg { width: 58px; height: 58px; }
+
+  #hud { position: fixed; right: 30px; bottom: 24px; font-family: var(--font-mono); font-size: 13px; color: var(--muted-2); letter-spacing: 1.4px; }
+  #hud.hide { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="deck">
+
+  <!-- 1 ─────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="eyebrow"><span class="dot"></span> The problem</div>
+    <h1>Inference means<br />renting <em>someone's cloud</em>.</h1>
+    <ul>
+      <li><span class="bullet"></span><div>Your prompt leaves your device, and you trust whoever receives it</div></li>
+      <li><span class="bullet"></span><div>Millions of <b>idle GPUs</b> sit in laptops with no way to sell their time</div></li>
+      <li><span class="bullet"></span><div>Paying per answer needs an <b>account</b>, a card, and a company in the middle</div></li>
+    </ul>
+    <div class="foot"><span class="chip">CONDUIT · ETHONLINE 2026</span></div>
+  </section>
+
+  <!-- 2 ─────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="eyebrow"><span class="dot"></span> How it works</div>
+    <h1>The payment <em>is</em><br />the handshake.</h1>
+    <ul>
+      <li><span class="bullet"></span><div>Buyer and seller find each other over a <b>DHT</b> — there is no server</div></li>
+      <li><span class="bullet"></span><div>A settled payment releases the seller's <b>firewalled GPU</b>. Nothing else does</div></li>
+      <li><span class="bullet"></span><div>The model runs <b>on the seller's machine</b>; weights never move</div></li>
+      <li><span class="bullet"></span><div>End to end encrypted, peer to peer — <b>0 bytes</b> to any cloud</div></li>
+    </ul>
+    <div class="foot"><span class="chip">CONDUIT · ETHONLINE 2026</span></div>
+  </section>
+
+  <!-- 3 ─────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="eyebrow"><span class="dot"></span> Arc <span class="role">· settlement</span></div>
+    <h1>Many answers,<br /><em>one</em> settlement.</h1>
+    <ul>
+      <li><span class="bullet"></span><div>A payment channel opens <b>once</b> on-chain, then every answer is an off-chain <b>EIP-712 voucher</b></div></li>
+      <li><span class="bullet"></span><div>The seller redeems them in a single <code>claim</code> — gas paid once, not per answer</div></li>
+      <li><span class="bullet"></span><div>On Arc, <b>USDC is the gas token too</b> — a seller earns and spends one asset</div></li>
+      <li><span class="bullet"></span><div>In this demo: <span class="money">2 answers → 1 transaction</span>, fee <span class="money">0.0015 USDC</span></div></li>
+    </ul>
+    <div class="foot"><span class="chip mint">chain 5042002</span><span class="chip">ConduitEscrow · 0xdC48E5e5…632C2</span></div>
+  </section>
+
+  <!-- 4 ─────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="eyebrow"><span class="dot"></span> World <span class="role">· personhood</span></div>
+    <h1>One actor can't be<br /><em>a thousand customers</em>.</h1>
+    <ul>
+      <li><span class="bullet"></span><div>A seller can require that a buyer is a <b>verified unique human</b></div></li>
+      <li><span class="bullet"></span><div>The wallet resolves to an <b>anonymous human ID</b> — not a name, not a face</div></li>
+      <li><span class="bullet"></span><div>Many wallets, <b>one person</b>: reach is counted in people, not addresses</div></li>
+      <li><span class="bullet"></span><div>Payment alone is not enough — a funded channel from an unverified wallet is <b>refused</b></div></li>
+    </ul>
+    <div class="foot"><span class="chip mint">AgentBook · World Chain</span><span class="chip">0xA23aB271…944dA</span></div>
+  </section>
+
+  <!-- 5 ─────────────────────────────────────────────────────────────────── -->
+  <section class="slide">
+    <div class="eyebrow"><span class="dot"></span> The Graph <span class="role">· reputation</span></div>
+    <h1>How they treated<br /><em>everyone</em>, not just you.</h1>
+    <ul>
+      <li><span class="bullet"></span><div>Every channel the escrow ever opened is <b>indexed from on-chain events</b></div></li>
+      <li><span class="bullet"></span><div>A first-time buyer can read a stranger's record <b>before paying anything</b></div></li>
+      <li><span class="bullet"></span><div>Forged signals are classified and <b>excluded</b> — visible, but not counted</div></li>
+      <li><span class="bullet"></span><div>It runs both ways: a buyer who <b>abandons channels</b> gets refused too</div></li>
+    </ul>
+    <div class="foot"><span class="chip mint">subgraph · arc-testnet</span><span class="chip">counts unique humans</span></div>
+  </section>
+
+</div></div>
+<div id="hud">1 / 5</div>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const hud = document.getElementById('hud');
+  const deck = document.getElementById('deck');
+  let i = 0;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('on', k === i));
+    hud.textContent = `${i + 1} / ${slides.length}`;
+  }
+  // Scale the fixed 1600x900 canvas to the window so the deck is pixel-identical on any
+  // display — what gets recorded does not depend on the machine it is shown on.
+  function fit() {
+    const s = Math.min(innerWidth / 1600, innerHeight / 900);
+    deck.style.transform = `scale(${s})`;
+  }
+  addEventListener('resize', fit);
+  addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'f') document.documentElement.requestFullscreen?.();
+    else if (e.key === 'h') hud.classList.toggle('hide');
+    else if (e.key === 'Home') show(0);
+  });
+  addEventListener('click', () => show(i + 1));
+
+  // #3 jumps straight to slide 3 — handy for re-recording one slide without clicking
+  // through the others, and for checking a single slide's layout.
+  const fromHash = () => show((parseInt(location.hash.slice(1), 10) || 1) - 1);
+  addEventListener('hashchange', fromHash);
+
+  fit(); fromHash();
+</script>
+</body>
+</html>
