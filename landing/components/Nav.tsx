@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Github } from "lucide-react";
 import BrandMark from "./BrandMark";
-import { REPO } from "@/lib/site";
+import { REPO, VERSION } from "@/lib/site";
 
 const LINKS = [
   { href: "#handshake", label: "How it works" },
@@ -33,7 +33,7 @@ export default function Nav() {
           <BrandMark size={28} />
           <span className="display text-[23px] leading-none">Conduit</span>
           <span className="mono ml-1 hidden rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-2 sm:inline-block">
-            testnet · v0.1.0
+            testnet · {VERSION}
           </span>
         </a>
 

@@ -5,6 +5,7 @@ import Handshake from "@/components/Handshake";
 import Features from "@/components/Features";
 import Roles from "@/components/Roles";
 import Models from "@/components/Models";
+import Integrations from "@/components/Integrations";
 import Download from "@/components/Download";
 import Testnet from "@/components/Testnet";
 import Footer from "@/components/Footer";
@@ -20,6 +21,7 @@ export default function Home() {
         <Features />
         <Roles />
         <Models />
+        <Integrations />
         <Download />
         <Testnet />
       </main>

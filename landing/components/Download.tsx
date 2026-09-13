@@ -5,7 +5,7 @@ import SectionHeader from "./SectionHeader";
 import Reveal from "./Reveal";
 import { LinuxGlyph, MacGlyph, WinGlyph } from "./OSGlyphs";
 import { useDetectedOS, type OS } from "@/lib/os";
-import { DOWNLOADS, RELEASES, RUN_FROM_SOURCE } from "@/lib/site";
+import { AVAILABLE, DOWNLOADS, RELEASES, RUN_FROM_SOURCE, VERSION } from "@/lib/site";
 
 function Card({
   detected,
@@ -50,10 +50,10 @@ export default function Download() {
         eyebrow="Download"
         title={
           <>
-            Get Conduit <span className="mono align-middle text-[0.5em] text-mint">v0.1.0</span>
+            Get Conduit <span className="mono align-middle text-[0.5em] text-mint">{VERSION}</span>
           </>
         }
-        lead="Pick your platform. Linux and Windows builds are ready now; the macOS installer is on the way — until then you can run Conduit from source."
+        lead="Pick your platform. Every build is the same product — it buys and sells inference peer to peer, and settles in USDC on Arc."
       />
 
       <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -100,21 +100,38 @@ export default function Download() {
               <MacGlyph />
             </span>
             <h3 className="mt-4 flex items-center gap-2 text-[18px] font-semibold">
-              macOS <SoonBadge />
+              macOS {AVAILABLE.mac ? null : <SoonBadge />}
             </h3>
-            <p className="mono mt-1 text-[12.5px] text-muted-2">Apple Silicon &amp; Intel · .dmg</p>
-            <p className="mt-5 text-[14px] leading-relaxed text-muted">
-              Packaged build coming shortly (it has to be built on a Mac). Until then,{" "}
-              <a
-                href={RUN_FROM_SOURCE}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-mint underline-offset-2 hover:underline"
-              >
-                run from source
-              </a>{" "}
-              — same product, a few terminal commands.
-            </p>
+            <p className="mono mt-1 text-[12.5px] text-muted-2">Apple Silicon · .dmg</p>
+            {AVAILABLE.mac ? (
+              <div className="mt-5 flex flex-col gap-2.5">
+                <a
+                  href={DOWNLOADS.macDmg}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center justify-between rounded-lg border border-line-2 px-3.5 py-3 text-[14px] font-medium transition-colors hover:border-mint-line hover:bg-mint-soft"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <DownloadIcon size={15} aria-hidden /> Disk image
+                    <span className="text-muted-2">· arm64</span>
+                  </span>
+                  <span className="mono text-[12px] text-muted-2 group-hover:text-mint">.dmg</span>
+                </a>
+              </div>
+            ) : (
+              <p className="mt-5 text-[14px] leading-relaxed text-muted">
+                Packaged build coming shortly (it has to be built on a Mac). Until then,{" "}
+                <a
+                  href={RUN_FROM_SOURCE}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-mint underline-offset-2 hover:underline"
+                >
+                  run from source
+                </a>{" "}
+                — same product, a few terminal commands.
+              </p>
+            )}
           </Card>
         </Reveal>
 
@@ -150,9 +167,9 @@ export default function Download() {
           <Terminal size={18} className="mt-0.5 shrink-0 text-amber" aria-hidden />
           <p className="leading-relaxed">
             <b className="text-amber">Linux AppImage:</b> after downloading, run{" "}
-            <code className="mono rounded bg-ink-0 px-1.5 py-0.5 text-text">chmod +x Conduit-0.1.0.AppImage</code>{" "}
+            <code className="mono rounded bg-ink-0 px-1.5 py-0.5 text-text">chmod +x Conduit-0.2.0.AppImage</code>{" "}
             then double-click it (or run{" "}
-            <code className="mono rounded bg-ink-0 px-1.5 py-0.5 text-text">./Conduit-0.1.0.AppImage</code>). On
+            <code className="mono rounded bg-ink-0 px-1.5 py-0.5 text-text">./Conduit-0.2.0.AppImage</code>). On
             some distros you may need <code className="mono rounded bg-ink-0 px-1.5 py-0.5 text-text">--no-sandbox</code>.
           </p>
         </div>

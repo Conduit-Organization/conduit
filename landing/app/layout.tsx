@@ -28,9 +28,9 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
-const title = "Conduit - buy AI answers from peers, pay per answer in USD₮";
+const title = "Conduit - buy AI answers from peers, pay per answer in USDC";
 const description =
-  "A serverless, peer-to-peer marketplace for AI inference. Pay a fraction of a cent in USD₮ per answer, or run a model on your own GPU and earn. No cloud, no account, no middleman — your keys and prompts stay on your device.";
+  "A serverless, peer-to-peer marketplace for AI inference. Pay a fraction of a cent in USDC per answer, or run a model on your own GPU and earn. No cloud, no account, no middleman — your keys and prompts stay on your device.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     "peer-to-peer",
     "P2P",
     "serverless",
-    "USDT",
+    "USDC",
     "micropayments",
     "local AI",
     "on-device LLM",
@@ -57,14 +57,14 @@ export const metadata: Metadata = {
     siteName: "Conduit",
     title: "Conduit — a peer-to-peer market for AI answers",
     description:
-      "Pay peers a fraction of a cent in USD₮ for AI answers, or run a model and earn. Serverless, no account, keys stay on your device.",
+      "Pay peers a fraction of a cent in USDC for AI answers, or run a model and earn. Serverless, no account, keys stay on your device.",
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
     title: "Conduit — a peer-to-peer market for AI answers",
     description:
-      "Pay peers a fraction of a cent in USD₮ for AI answers, or run a model and earn. Serverless, no account, keys stay on your device.",
+      "Pay peers a fraction of a cent in USDC for AI answers, or run a model and earn. Serverless, no account, keys stay on your device.",
   },
   robots: { index: true, follow: true },
 };

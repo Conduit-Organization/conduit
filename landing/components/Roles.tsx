@@ -4,7 +4,7 @@ import Reveal from "./Reveal";
 
 const BUYER = [
   <>Install Conduit and <b>create your wallet</b> — a 12-word recovery phrase, locked with a password.</>,
-  <>Top it up with free <b>test USD₮</b> from the in-app faucet link.</>,
+  <>Top it up with free <b>test USDC</b> from the in-app faucet link.</>,
   <>Open the marketplace and <b>pick a seller</b> by reputation, price, and speed — or let Conduit auto-route.</>,
   <>Ask. An escrow channel opens, and each answer is paid with a signed voucher. <b>Answers in ~2s.</b></>,
 ];
@@ -13,7 +13,7 @@ const SELLER = [
   <>Conduit <b>benchmarks your device</b> and highlights the best model it can run profitably.</>,
   <>Pick that model (or any other your hardware can handle) and <b>go online</b>.</>,
   <>Your offer is published to the network; buyers anywhere can <b>discover you over the DHT</b>.</>,
-  <>Serve answers and <b>earn USD₮</b>. Payments settle to your wallet — reputation builds with every request.</>,
+  <>Serve answers and <b>earn USDC</b>. Payments settle to your wallet — reputation builds with every request.</>,
 ];
 
 function Lane({
@@ -65,7 +65,7 @@ export default function Roles() {
             The same download is <em>both</em> sides of the market
           </>
         }
-        lead="A non-custodial USD₮ wallet is created on first launch and lives only on your device. Flip between buying and selling whenever you like."
+        lead="A non-custodial USDC wallet is created on first launch and lives only on your device. Flip between buying and selling whenever you like."
       />
       <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2">
         <Reveal>

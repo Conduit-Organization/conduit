@@ -140,7 +140,7 @@ export default function Handshake() {
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-[16.5px] leading-relaxed text-muted">
               No API key to provision, no account to create. You open an instant escrow channel with a
-              peer, and a settled USD₮ micro-payment is what unlocks the answer.
+              peer, and a settled USDC micro-payment is what unlocks the answer.
             </p>
           </div>
 
@@ -155,7 +155,7 @@ export default function Handshake() {
                   </span>
                   <div>
                     <div className="text-[14px] font-semibold">You — buyer</div>
-                    <div className="mono text-[11px] text-muted-2">WDK wallet · USD₮</div>
+                    <div className="mono text-[11px] text-muted-2">WDK wallet · USDC</div>
                   </div>
                 </div>
                 <div className="hs-voucher mt-4 rounded-lg border border-line bg-ink-0 p-3">
@@ -163,7 +163,7 @@ export default function Handshake() {
                     <FileSignature size={12} aria-hidden /> EIP-712 voucher
                   </div>
                   <div className="mono mt-1.5 text-[11px] leading-relaxed text-muted-2">
-                    pay 0.0001 USD₮ → seller
+                    pay 0.01 USDC → seller
                     <br />
                     sig 0x9f…c2 · off-chain
                   </div>

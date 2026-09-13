@@ -17,7 +17,7 @@ const FEATURES = [
   {
     icon: Coins,
     title: "Earn from your hardware",
-    body: "Idle GPU? Run an open-weight model and get paid in USD₮ for every answer you serve. Conduit benchmarks your device and recommends the most profitable model it can run well.",
+    body: "Idle GPU? Run an open-weight model and get paid in USDC for every answer you serve. Conduit benchmarks your device and recommends the most profitable model it can run well.",
   },
 ];
 

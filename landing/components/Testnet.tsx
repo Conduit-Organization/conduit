@@ -1,4 +1,5 @@
 import { FlaskConical, Droplets } from "lucide-react";
+import { NETWORK, VERSION } from "@/lib/site";
 import Reveal from "./Reveal";
 
 export default function Testnet() {
@@ -17,21 +18,22 @@ export default function Testnet() {
           <div className="flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
               <span className="eyebrow inline-flex items-center gap-2 text-amber">
-                <FlaskConical size={14} aria-hidden /> Public testnet · v0.1.0
+                <FlaskConical size={14} aria-hidden /> Public testnet · {VERSION}
               </span>
               <h2 className="display mt-3 text-[clamp(26px,3.6vw,38px)]">
                 Try the real architecture, <em className="not-italic text-amber italic">end to end</em>
               </h2>
               <p className="mt-4 text-[15.5px] leading-relaxed text-muted">
-                Payments use <b className="font-semibold text-text">test USD₮ on the Sepolia network</b> — no
+                Payments use <b className="font-semibold text-text">test USDC on {NETWORK.label}</b> — no
                 real money moves. Everything else is the genuine thing: real P2P discovery, real escrow
-                channels, real signed vouchers, real on-device inference. Grab free test USD₮ from the in-app
-                faucet link and exercise the whole flow.
+                channels, real signed vouchers, real on-device inference. On Arc, USDC is the gas token
+                as well, so a seller earns and spends a single asset. Grab free test USDC from the
+                in-app faucet link and exercise the whole flow.
               </p>
             </div>
             <ul className="flex shrink-0 flex-col gap-2.5">
               {[
-                { icon: FlaskConical, label: "Test USD₮ · Sepolia" },
+                { icon: FlaskConical, label: `Test USDC · ${NETWORK.label}` },
                 { icon: Droplets, label: "Free in-app faucet" },
               ].map(({ icon: Icon, label }) => (
                 <li

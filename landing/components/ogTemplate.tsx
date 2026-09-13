@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { VERSION } from "@/lib/site";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = "image/png";
@@ -70,7 +71,7 @@ export async function renderOgImage() {
               letterSpacing: 1,
             }}
           >
-            Public testnet · v0.1.0
+            Public testnet · {VERSION}
           </div>
         </div>
 
@@ -84,7 +85,7 @@ export async function renderOgImage() {
             Pay per answer.
           </div>
           <div style={{ display: "flex", marginTop: 26, fontSize: 28, color: "#8a9aa6", maxWidth: 940 }}>
-            A serverless, peer-to-peer marketplace for AI inference. Pay a fraction of a cent in USDT —
+            A serverless, peer-to-peer marketplace for AI inference. Pay a fraction of a cent in USDC —
             or run a model and earn.
           </div>
         </div>

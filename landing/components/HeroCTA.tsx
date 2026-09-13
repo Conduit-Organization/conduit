@@ -4,7 +4,7 @@ import { ArrowRight, Download } from "lucide-react";
 import Magnetic from "./Magnetic";
 import { LinuxGlyph, MacGlyph, WinGlyph } from "./OSGlyphs";
 import { useDetectedOS, type OS } from "@/lib/os";
-import { DOWNLOADS, MAC_AVAILABLE } from "@/lib/site";
+import { DOWNLOADS, MAC_AVAILABLE, VERSION } from "@/lib/site";
 
 function primary(os: OS): { label: string; href: string; external: boolean; note: React.ReactNode } {
   switch (os) {
@@ -15,7 +15,7 @@ function primary(os: OS): { label: string; href: string; external: boolean; note
         external: true,
         note: (
           <>
-            AppImage · v0.1.0 · also available as{" "}
+            AppImage · {VERSION} · also available as{" "}
             <a href="#download" className="text-mint underline-offset-2 hover:underline">
               .deb
             </a>
@@ -34,7 +34,7 @@ function primary(os: OS): { label: string; href: string; external: boolean; note
         label: "Download for Windows",
         href: DOWNLOADS.winExe,
         external: true,
-        note: ".exe installer · v0.1.0",
+        note: `.exe installer · ${VERSION}`,
       };
     default:
       return {

@@ -64,7 +64,7 @@ export default function Footer() {
             Conduit · serverless P2P inference · open source
           </p>
           <p className="mono text-[12.5px] text-muted-2">
-            Testnet release · test USD₮ on Sepolia · no real money
+            Testnet release · test USDC on Arc · no real money
           </p>
         </div>
       </div>

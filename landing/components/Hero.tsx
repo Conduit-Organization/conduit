@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
+import { VERSION } from "@/lib/site";
 import { useRef } from "react";
 import NodeSwarm from "./NodeSwarm";
 import HeroCTA from "./HeroCTA";
@@ -105,7 +106,7 @@ export default function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-60" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint shadow-[0_0_10px_var(--mint)]" />
             </span>
-            Public testnet · v0.1.0
+            Public testnet · {VERSION}
           </motion.span>
         </div>
 
@@ -135,7 +136,7 @@ export default function Hero() {
           className="mt-6 max-w-[60ch] text-[clamp(17px,2vw,20px)] leading-relaxed text-muted"
         >
           Conduit is a <strong className="font-semibold text-text">serverless, peer-to-peer marketplace for AI inference</strong>.
-          Run a model on your machine and earn, or pay a fraction of a cent in USD₮ for an answer from
+          Run a model on your machine and earn, or pay a fraction of a cent in USDC for an answer from
           someone who does. No cloud, no account, no middleman — your keys and prompts stay on your device.
         </motion.p>
 
@@ -154,7 +155,7 @@ export default function Hero() {
           className="mono mt-7 flex items-center gap-2.5 text-[12.5px] text-muted-2"
         >
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber" aria-hidden />
-          Test USD₮ on Sepolia — no real money, all of the real architecture.
+          Test USDC on Arc — no real money, all of the real architecture.
         </motion.p>
       </motion.div>
     </section>

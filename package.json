@@ -1,6 +1,6 @@
 {
   "name": "conduit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Conduit \u2014 a serverless P2P inference market where a settled USDC payment is the access handshake.",

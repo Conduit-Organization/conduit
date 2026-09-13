@@ -82,7 +82,7 @@ function Why() {
           </h1>
         </M>
         <M variants={rise} className="mt-6 max-w-[58ch] text-[clamp(1.05rem,1.6vw,1.3rem)] text-muted">
-          Conduit is a serverless marketplace for AI inference. A settled USD₮ micro-payment is the
+          Conduit is a serverless marketplace for AI inference. A settled USDC micro-payment is the
           only access handshake — <span className="text-text">no cloud, no account, no middleman.</span>
         </M>
         <M
@@ -186,12 +186,12 @@ function Solution() {
         </h2>
       </M>
       <M variants={rise} className="mt-5 max-w-[62ch] text-[15.5px] text-muted">
-        Buyers pay a fraction of a cent per answer in USD₮. Sellers earn from hardware they already own.
+        Buyers pay a fraction of a cent per answer in USDC. Sellers earn from hardware they already own.
         A confirmed payment — not an API key — is what unlocks the model.
       </M>
       <div className="mt-9 grid gap-4 md:grid-cols-3">
         <Pillar icon={Coins} title="Pay per answer" money>
-          A fraction of a cent in USD₮. Open a channel once, then settle off-chain per answer — instantly.
+          A fraction of a cent in USDC. Open a channel once, then settle off-chain per answer — instantly.
         </Pillar>
         <Pillar icon={ShieldCheck} title="Private &amp; serverless">
           Peers find each other directly. Your keys and your prompts never leave your device.
@@ -289,13 +289,13 @@ function How() {
 /* ===================================================== 05 — STATUS / VISION */
 function Status() {
   const shipped = [
-    "Public testnet, live on Sepolia",
+    "Public testnet, live on Arc",
     "Instant escrow payment channels",
     "Desktop app — Linux, macOS & Windows",
     "First-party seller reputation",
   ];
   const next = [
-    "Mainnet USD₮ settlement",
+    "Mainnet USDC settlement",
     "Model auctions & richer routing",
     "A standing market of seed sellers",
     "Mobile & browser clients",
