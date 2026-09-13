@@ -37,7 +37,17 @@ export default function Integrations() {
                 <span className="eyebrow text-mint">{it.role}</span>
               </div>
 
+              {/* The problem first, then the answer. A partner logo says nothing about why
+                  the thing is here; the sentence it closes does. */}
+              <p className="mt-4 border-l-2 border-amber/40 pl-3 text-[13.5px] leading-relaxed text-[#f0d9a6]">
+                {it.gap}
+              </p>
+
               <p className="mt-4 text-[14.5px] leading-relaxed text-muted">{it.what}</p>
+
+              <p className="mono mt-4 inline-flex items-center gap-2 rounded-lg border border-mint-line bg-mint-soft px-3 py-1.5 text-[11.5px] text-mint">
+                {it.proof}
+              </p>
 
               <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t border-line pt-4">
                 {it.facts.map(([k, v]) => (

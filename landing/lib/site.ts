@@ -50,6 +50,8 @@ export const INTEGRATIONS = [
   {
     name: "Arc",
     role: "settlement",
+    gap: "A seller earning one asset while paying gas in another does not add up.",
+    proof: "6 answers, 2 transactions",
     what:
       "Answers are paid for in USDC through a payment channel: one deposit on-chain, then every " +
       "answer is an off-chain signed voucher, redeemed together. Gas is USDC too, so a seller " +
@@ -64,6 +66,8 @@ export const INTEGRATIONS = [
   {
     name: "The Graph",
     role: "reputation",
+    gap: "A buyer meeting a seller for the first time has no evidence about them.",
+    proof: "every channel indexed, not sampled",
     what:
       "Every channel the escrow has ever opened is indexed from on-chain events, so a first-time " +
       "buyer can see how a seller treated everyone — not just themselves. Forged signals are " +
@@ -78,6 +82,8 @@ export const INTEGRATIONS = [
   {
     name: "World",
     role: "personhood",
+    gap: "Reputation counted per address is free to forge — addresses cost nothing.",
+    proof: "forging costs a person, not gas",
     what:
       "A seller can require that a buyer is a verified unique human. The wallet resolves to an " +
       "anonymous human id — never an identity — so one actor cannot be a thousand customers, and " +
@@ -113,5 +119,8 @@ export const PRIMITIVES = [
   "Non-custodial WDK wallet",
   "EIP-712 vouchers",
   "Escrow payment channels",
+  "USDC settlement on Arc",
+  "Settlement history on The Graph",
+  "World ID proof of personhood",
   "Open source",
 ] as const;

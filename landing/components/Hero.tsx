@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
-import { VERSION } from "@/lib/site";
+import { INTEGRATIONS, VERSION } from "@/lib/site";
 import { useRef } from "react";
 import NodeSwarm from "./NodeSwarm";
 import HeroCTA from "./HeroCTA";
@@ -157,6 +157,29 @@ export default function Hero() {
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber" aria-hidden />
           Test USDC on Arc — no real money, all of the real architecture.
         </motion.p>
+
+        {/* The three things the market rests on, named up front. Each is a link, because a
+            claim a reader cannot check is worth less than one they can. */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 1.05, ease: [0.2, 0.8, 0.2, 1] }}
+          className="mt-6 flex flex-wrap items-center gap-2.5"
+        >
+          {INTEGRATIONS.map((it) => (
+            <a
+              key={it.name}
+              href="#integrations"
+              className="group inline-flex items-center gap-2 rounded-full border border-line-2 bg-ink-1/60 px-3.5 py-1.5 text-[12.5px] transition-colors hover:border-mint-line hover:bg-mint-soft"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-mint" aria-hidden />
+              <span className="font-medium text-text">{it.name}</span>
+              <span className="mono text-[10.5px] uppercase tracking-[0.1em] text-muted-2 group-hover:text-mint">
+                {it.role}
+              </span>
+            </a>
+          ))}
+        </motion.div>
       </motion.div>
     </section>
   );

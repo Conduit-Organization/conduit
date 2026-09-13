@@ -8,6 +8,7 @@ import { REPO, VERSION } from "@/lib/site";
 const LINKS = [
   { href: "#handshake", label: "How it works" },
   { href: "#models", label: "Models" },
+  { href: "#integrations", label: "Built on" },
   { href: "#download", label: "Download" },
 ];
 
