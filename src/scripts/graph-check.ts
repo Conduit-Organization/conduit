@@ -1,6 +1,7 @@
 // Live verification of the settlement-history subgraph — ETHOnline 2026 (new work).
 //
-// Run: CONDUIT_SUBGRAPH_URL=<studio query url> npm run graph-check
+// Run: npm run graph-check   (uses the selected network's subgraph;
+//      CONDUIT_SUBGRAPH_URL=<url> overrides it)
 //
 // Queries the deployed subgraph and prints the settlement record it derived from real
 // on-chain history. No mocks anywhere in the path — if the endpoint is unset or the
@@ -11,8 +12,16 @@
 // the same buyer reopened with the same seller 24 seconds later. A naive counter scores
 // that seller 0.0. This checks the mapping actually classified them that way.
 import { globalScore, reliability, type GlobalRecord } from '../core/qualification';
+import { loadConfig } from '../core/config';
 
-const ENDPOINT = process.env.CONDUIT_SUBGRAPH_URL || '';
+// The engine resolves this from the selected network profile, so each network is checked
+// against its own settlement history. This script demanded the URL be passed by hand and
+// refused to run without it — asking the operator for something the app already knows, and
+// making it easy to check one network's subgraph while running on another.
+const cfg = loadConfig();
+// The asset is the network's, not a constant — this printed USD₮ while settling in USDC.
+const SYM = cfg.network.settlementSymbol;
+const ENDPOINT = process.env.CONDUIT_SUBGRAPH_URL || cfg.subgraphUrl || '';
 
 const QUERY = `{
   _meta { block { number } hasIndexingErrors }
@@ -45,9 +54,10 @@ const usd = (base: string | bigint) => (Number(base) / 1e6).toFixed(6);
 
 async function main(): Promise<void> {
   if (!ENDPOINT) {
-    console.error('CONDUIT_SUBGRAPH_URL is not set.\n');
-    console.error('  Get it from https://thegraph.com/studio → your subgraph → Query.');
-    console.error('  Then: CONDUIT_SUBGRAPH_URL=<url> npm run graph-check');
+    console.error(`No subgraph endpoint for network '${cfg.network.name}'.\n`);
+    console.error('  Networks with a deployed subgraph carry it in their profile');
+    console.error('  (src/core/networks.ts). To check a different one:');
+    console.error('    CONDUIT_SUBGRAPH_URL=<url> npm run graph-check');
     process.exit(1);
   }
 
@@ -83,7 +93,7 @@ async function main(): Promise<void> {
   console.log(`      ├─ qualified  : ${m.totalQualifiedWithdrawn}   ← counts against the seller`);
   console.log(`      ├─ probes     : ${m.totalProbeChannels}   ← indexed, visible, not scoring`);
   console.log(`      └─ renewals   : ${m.totalRenewals}   ← the buyer came straight back`);
-  console.log(`    total claimed   : ${usd(m.totalClaimed)} USD₮`);
+  console.log(`    total claimed   : ${usd(m.totalClaimed)} ${SYM}`);
   console.log(`    sellers/buyers  : ${m.sellerCount} / ${m.buyerCount}`);
 
   check('indexed real settlement history', Number(m.totalChannelsOpened) > 0, `${m.totalChannelsOpened} channels`);
@@ -148,7 +158,7 @@ async function main(): Promise<void> {
     console.log(`\n    ${s.id}`);
     console.log(`      opened ${s.channelsOpened} · settled ${s.channelsSettled} · withdrawn ${s.withdrawnTotal}` +
       ` (qualified ${s.qualifiedWithdrawn}, probes ${s.probeChannels}, renewals ${s.renewals})`);
-    console.log(`      earned ${usd(s.totalClaimed)} USD₮ from ${s.uniqueBuyers} buyer(s)`);
+    console.log(`      earned ${usd(s.totalClaimed)} ${SYM} from ${s.uniqueBuyers} buyer(s)`);
     console.log(`      naive reliability : ${(naive * 100).toFixed(1)}%   ← the reading we do NOT ship`);
     console.log(`      hardened          : ${(reliability(rec) * 100).toFixed(1)}%`);
     console.log(`      globalScore       : ${globalScore(rec).toFixed(4)}`);
