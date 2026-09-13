@@ -5,6 +5,7 @@ import { Star } from './icons';
 import { fmt, short, modelName } from '../format';
 import * as bm from '../bookmarks';
 import Integrations from './Integrations';
+import SellerHistory from './SellerHistory';
 
 // The buyer's landing screen (Binance-P2P style): browse sellers, ★ bookmark, pick one — or Auto —
 // then enter chat. Choosing a seller ≠ paying: easy questions still answer free on-device; the chosen
@@ -25,6 +26,7 @@ export default function MarketplaceScreen({
 }) {
   const sym = useSymbol();
   const [marks, setMarks] = useState<bm.Bookmark[]>([]);
+  const [history, setHistory] = useState<Peer | null>(null);
   useEffect(() => { setMarks(bm.load()); }, []);
 
   const graph = state?.graph;
@@ -207,6 +209,19 @@ export default function MarketplaceScreen({
                   )
                 )}
 
+                {/* The card shows the conclusion; this opens the reasoning behind it.
+                    A span, not a button: the card itself is already a button. */}
+                <span
+                  className="ms-history"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); setHistory(s); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setHistory(s); } }}
+                  title="See this seller's full settlement history"
+                >
+                  view history
+                </span>
+
                 <div className={`ms-state${s.online && s.sameNetwork !== false ? ' on' : ''}`}>
                   {!s.online
                     ? 'offline'
@@ -231,6 +246,10 @@ export default function MarketplaceScreen({
       </section>
 
       <Integrations state={state} />
+
+      {history && (
+        <SellerHistory seller={history} graph={graph} onClose={() => setHistory(null)} />
+      )}
     </div>
   );
 }
